@@ -30,6 +30,8 @@ pub struct Merchant {
 pub enum DataKey {
     Merchant(Address),
     Admin,
+    /// Stores the list of all registered merchants for enumeration
+    MerchantList,
 }
 
 #[contracterror]
@@ -82,7 +84,10 @@ impl MerchantRegistry {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Merchant(merchant_id), &merchant);
+            .set(&DataKey::Merchant(merchant_id.clone()), &merchant);
+
+        // Add to merchant list for enumeration
+        Self::add_to_merchant_list(&env, &merchant_id);
 
         Ok(())
     }
@@ -175,6 +180,82 @@ impl MerchantRegistry {
     }
 
     // Helper functions
+    fn add_to_merchant_list(env: &Env, merchant_id: &Address) {
+        let key = DataKey::MerchantList;
+        let mut merchants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| vec![env]);
+
+        // Only add if not already present
+        let mut found = false;
+        for m in merchants.iter() {
+            if m == *merchant_id {
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            merchants.push_back(merchant_id.clone());
+            env.storage().persistent().set(&key, &merchants);
+        }
+    }
+
+    /// Get all registered merchants with pagination support
+    pub fn get_all_merchants(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<Merchant>, Error> {
+        let merchant_ids: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MerchantList)
+            .unwrap_or_else(|| vec![&env]);
+
+        if limit == 0 {
+            return Ok(vec![&env]);
+        }
+
+        let mut result = vec![&env];
+        let start = offset as usize;
+        let end = core::cmp::min(merchant_ids.len(), start.saturating_add(limit as usize));
+
+        let mut i = start;
+        while i < end {
+            if let Some(merchant_id) = merchant_ids.get(i) {
+                if let Ok(merchant) = Self::get_merchant_internal(&env, &merchant_id) {
+                    result.push_back(merchant);
+                }
+            }
+            i += 1;
+        }
+
+        Ok(result)
+    }
+
+    /// Get all verified merchants (kyc_tier != Unverified)
+    pub fn get_verified_merchants(env: Env) -> Result<Vec<Merchant>, Error> {
+        let merchant_ids: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::MerchantList)
+            .unwrap_or_else(|| vec![&env]);
+
+        let mut result = vec![&env];
+        for merchant_id in merchant_ids.iter() {
+            if let Ok(merchant) = Self::get_merchant_internal(&env, &merchant_id) {
+                if merchant.kyc_tier != KycTier::Unverified {
+                    result.push_back(merchant);
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
     fn get_merchant_internal(env: &Env, merchant_id: &Address) -> Result<Merchant, Error> {
         env.storage()
             .persistent()

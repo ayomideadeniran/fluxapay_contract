@@ -161,3 +161,89 @@ fn test_set_kyc_tier_unauthorized() {
     // Non-admin tries to set KYC tier
     client.set_kyc_tier(&attacker, &merchant_id, &KycTier::Business);
 }
+
+#[test]
+fn test_merchant_enumeration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Register multiple merchants
+    let merchant1 = Address::generate(&env);
+    let merchant2 = Address::generate(&env);
+    let merchant3 = Address::generate(&env);
+
+    client.register_merchant(
+        &merchant1,
+        &String::from_str(&env, "Merchant 1"),
+        &String::from_str(&env, "USDC"),
+    );
+    client.register_merchant(
+        &merchant2,
+        &String::from_str(&env, "Merchant 2"),
+        &String::from_str(&env, "USDC"),
+    );
+    client.register_merchant(
+        &merchant3,
+        &String::from_str(&env, "Merchant 3"),
+        &String::from_str(&env, "USDC"),
+    );
+
+    // Get all merchants - should return all 3
+    let all_merchants = client.get_all_merchants(&0, &10);
+    assert_eq!(all_merchants.len(), 3);
+
+    // Verify pagination works
+    let first_two = client.get_all_merchants(&0, &2);
+    assert_eq!(first_two.len(), 2);
+
+    let third_only = client.get_all_merchants(&2, &10);
+    assert_eq!(third_only.len(), 1);
+}
+
+#[test]
+fn test_verified_merchants_filter() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    // Register merchants
+    let merchant1 = Address::generate(&env);
+    let merchant2 = Address::generate(&env);
+    let merchant3 = Address::generate(&env);
+
+    client.register_merchant(
+        &merchant1,
+        &String::from_str(&env, "Merchant 1"),
+        &String::from_str(&env, "USDC"),
+    );
+    client.register_merchant(
+        &merchant2,
+        &String::from_str(&env, "Merchant 2"),
+        &String::from_str(&env, "USDC"),
+    );
+    client.register_merchant(
+        &merchant3,
+        &String::from_str(&env, "Merchant 3"),
+        &String::from_str(&env, "USDC"),
+    );
+
+    // Verify only merchant2
+    client.verify_merchant(&admin, &merchant2);
+
+    // Get verified merchants - should return only merchant2
+    let verified = client.get_verified_merchants();
+    assert_eq!(verified.len(), 1);
+    assert_eq!(verified.get(0).unwrap().merchant_id, merchant2);
+    assert_eq!(verified.get(0).unwrap().kyc_tier, KycTier::Basic);
+}
