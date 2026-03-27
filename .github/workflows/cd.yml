@@ -47,6 +47,7 @@ jobs:
   # Deploy to production (manual trigger only)
   deploy-production:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.target-environment == 'production'
+    needs: [deploy-staging]
     uses: ./.github/workflows/deploy.yml
     with:
       environment_name: "production"
