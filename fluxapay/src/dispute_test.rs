@@ -321,3 +321,71 @@ fn test_dispute_invalid_amount() {
         &customer,
     );
 }
+
+/// Issue #26: verify that resolve_dispute_with_refund works with only the
+/// operator's auth — no disputer auth required in the invocation context.
+/// Uses mock_all_auths to confirm the internal path (create_refund_internal)
+/// does not call require_auth on the disputer.
+#[test]
+fn test_resolve_dispute_with_only_operator_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (admin, payment_client, refund_client) = setup_contracts(&env);
+    let merchant = Address::generate(&env);
+    let customer = Address::generate(&env);
+    let operator = Address::generate(&env);
+
+    refund_client.grant_role(&admin, &Symbol::new(&env, "SETTLEMENT_OPERATOR"), &operator);
+
+    let payment_id = String::from_str(&env, "pay_auth_test");
+    let amount = 500i128;
+    payment_client.create_payment(
+        &payment_id,
+        &merchant,
+        &amount,
+        &Symbol::new(&env, "USDC"),
+        &merchant,
+        &(env.ledger().timestamp() + 3600),
+    );
+
+    let oracle = Address::generate(&env);
+    payment_client.grant_role(&admin, &Symbol::new(&env, "ORACLE"), &oracle);
+    let tx_hash = BytesN::<32>::random(&env);
+    payment_client.verify_payment(&oracle, &payment_id, &tx_hash, &customer, &amount);
+
+    let dispute_id = refund_client.create_dispute(
+        &payment_id,
+        &amount,
+        &String::from_str(&env, "Item not received"),
+        &String::from_str(&env, "Tracking shows lost"),
+        &customer,
+    );
+
+    // Resolve — the internal create_refund_internal must NOT call
+    // disputer.require_auth(), so only the operator's auth is needed.
+    let refund_id = refund_client.resolve_dispute_with_refund(
+        &operator,
+        &dispute_id,
+        &String::from_str(&env, "Refund approved"),
+    );
+
+    // Verify the auth invocations: only the operator should have been required
+    // at the top level (not the disputer/customer).
+    let auths = env.auths();
+    let operator_auth_count = auths.iter().filter(|(addr, _)| addr == &operator).count();
+    assert!(operator_auth_count >= 1, "operator auth must be present");
+
+    // The disputer (customer) must NOT appear as a top-level auth requirement.
+    let customer_top_level = auths.iter().any(|(addr, _)| addr == &customer);
+    assert!(
+        !customer_top_level,
+        "disputer must not be required as top-level auth in resolve_dispute_with_refund"
+    );
+
+    let dispute = refund_client.get_dispute(&dispute_id);
+    assert_eq!(dispute.status, DisputeStatus::Resolved);
+
+    let refund = refund_client.get_refund(&refund_id);
+    assert_eq!(refund.status, RefundStatus::Completed);
+}

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, Env, Symbol};
+use soroban_sdk::{contracterror, contracttype, vec, Address, Env, Symbol, Vec};
 
 // Role-based access control implementation
 pub fn role_admin(env: &Env) -> Symbol {
@@ -32,6 +32,8 @@ pub enum AccessControlError {
 pub enum AccessControlDataKey {
     Role(Symbol, Address),
     Admin,
+    /// Stores the list of all addresses holding a given role.
+    RoleMembers(Symbol),
 }
 
 pub struct AccessControl;
@@ -142,16 +144,61 @@ impl AccessControl {
         Ok(())
     }
 
+    /// Returns all addresses currently holding the given role.
+    pub fn get_role_members(env: &Env, role: &Symbol) -> Vec<Address> {
+        env.storage()
+            .persistent()
+            .get(&AccessControlDataKey::RoleMembers(role.clone()))
+            .unwrap_or_else(|| vec![env])
+    }
+
     fn grant_role_internal(env: &Env, role: &Symbol, account: &Address) {
         env.storage().persistent().set(
             &AccessControlDataKey::Role(role.clone(), account.clone()),
             &true,
         );
+
+        // Maintain the role members index
+        let key = AccessControlDataKey::RoleMembers(role.clone());
+        let mut members: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| vec![env]);
+
+        // Only add if not already present (guard against double-add)
+        let mut found = false;
+        for m in members.iter() {
+            if m == *account {
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            members.push_back(account.clone());
+            env.storage().persistent().set(&key, &members);
+        }
     }
 
     fn revoke_role_internal(env: &Env, role: &Symbol, account: &Address) {
         env.storage()
             .persistent()
             .remove(&AccessControlDataKey::Role(role.clone(), account.clone()));
+
+        // Remove from the role members index
+        let key = AccessControlDataKey::RoleMembers(role.clone());
+        let members: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or_else(|| vec![env]);
+
+        let mut updated = vec![env];
+        for m in members.iter() {
+            if m != *account {
+                updated.push_back(m);
+            }
+        }
+        env.storage().persistent().set(&key, &updated);
     }
 }

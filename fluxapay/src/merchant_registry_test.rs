@@ -21,7 +21,8 @@ fn test_merchant_registration() {
     assert_eq!(merchant.merchant_id, merchant_id);
     assert_eq!(merchant.business_name, business_name);
     assert_eq!(merchant.settlement_currency, settlement_currency);
-    assert!(!merchant.verified);
+    // New: kyc_tier starts as Unverified
+    assert_eq!(merchant.kyc_tier, KycTier::Unverified);
     assert!(merchant.active);
     assert!(merchant.created_at > 0);
 }
@@ -76,10 +77,11 @@ fn test_merchant_verification() {
         &String::from_str(&env, "USDC"),
     );
 
+    // verify_merchant sets KycTier::Basic for backward compatibility
     client.verify_merchant(&admin, &merchant_id);
 
     let merchant = client.get_merchant(&merchant_id);
-    assert!(merchant.verified);
+    assert_eq!(merchant.kyc_tier, KycTier::Basic);
 }
 
 #[test]
@@ -105,4 +107,57 @@ fn test_unauthorized_verification() {
 
     // Attacker tries to verify the merchant
     client.verify_merchant(&attacker, &merchant_id);
+}
+
+#[test]
+fn test_set_kyc_tier() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let merchant_id = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "BigCorp"),
+        &String::from_str(&env, "USDC"),
+    );
+
+    // Promote through tiers
+    client.set_kyc_tier(&admin, &merchant_id, &KycTier::Full);
+    assert_eq!(client.get_merchant(&merchant_id).kyc_tier, KycTier::Full);
+
+    client.set_kyc_tier(&admin, &merchant_id, &KycTier::Business);
+    assert_eq!(
+        client.get_merchant(&merchant_id).kyc_tier,
+        KycTier::Business
+    );
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #3)")]
+fn test_set_kyc_tier_unauthorized() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let attacker = Address::generate(&env);
+    let merchant_id = Address::generate(&env);
+
+    client.initialize(&admin);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Merchant"),
+        &String::from_str(&env, "USDC"),
+    );
+
+    // Non-admin tries to set KYC tier
+    client.set_kyc_tier(&attacker, &merchant_id, &KycTier::Business);
 }

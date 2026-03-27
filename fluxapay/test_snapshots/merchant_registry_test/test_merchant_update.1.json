@@ -134,6 +134,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "kyc_tier"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "Unverified"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "merchant_id"
                       },
                       "val": {
@@ -146,14 +158,6 @@
                       },
                       "val": {
                         "string": "EUR"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "verified"
-                      },
-                      "val": {
-                        "bool": false
                       }
                     }
                   ]

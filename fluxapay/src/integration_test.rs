@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{
-    merchant_registry::{MerchantRegistry, MerchantRegistryClient},
+    merchant_registry::{KycTier, MerchantRegistry, MerchantRegistryClient},
     DisputeStatus, PaymentProcessor, PaymentProcessorClient, PaymentStatus, RefundManager,
     RefundManagerClient, RefundStatus,
 };
@@ -56,7 +56,7 @@ fn test_happy_path_flow() {
     );
     merchant_client.verify_merchant(&admin, &merchant);
     let merchant_info = merchant_client.get_merchant(&merchant);
-    assert!(merchant_info.verified);
+    assert_eq!(merchant_info.kyc_tier, KycTier::Basic);
 
     // 2. Create and Verify Payment
     let payment_id = String::from_str(&env, "PAY_01");

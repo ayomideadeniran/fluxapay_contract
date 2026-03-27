@@ -168,6 +168,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "kyc_tier"
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "Basic"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "merchant_id"
                       },
                       "val": {
@@ -180,14 +192,6 @@
                       },
                       "val": {
                         "string": "USDC"
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "verified"
-                      },
-                      "val": {
-                        "bool": true
                       }
                     }
                   ]

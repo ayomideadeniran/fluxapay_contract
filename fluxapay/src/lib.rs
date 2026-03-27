@@ -7,6 +7,9 @@ use soroban_sdk::{
 mod access_control;
 pub mod fx_oracle;
 use access_control::{role_oracle, role_settlement_operator, AccessControl};
+// Re-export for tests
+#[allow(unused_imports)]
+pub use access_control::AccessControlDataKey;
 use fx_oracle::{FXOracle, FXOracleClient, FXOracleError, RateData};
 
 #[contract]
@@ -170,6 +173,11 @@ impl RefundManager {
         AccessControl::get_admin(&env)
     }
 
+    /// Returns all addresses currently holding the given role (issue #37).
+    pub fn get_role_members(env: Env, role: Symbol) -> Vec<Address> {
+        AccessControl::get_role_members(&env, &role)
+    }
+
     pub fn create_refund(
         env: Env,
         payment_id: String,
@@ -218,7 +226,13 @@ impl RefundManager {
         payment_refunds.push_back(refund_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::PaymentRefunds(payment_id), &payment_refunds);
+            .set(&DataKey::PaymentRefunds(payment_id.clone()), &payment_refunds);
+
+        // Issue #27: emit REFUND/CREATED event
+        env.events().publish(
+            (Symbol::new(env, "REFUND"), Symbol::new(env, "CREATED")),
+            (payment_id, refund_id.clone(), refund_amount),
+        );
 
         Ok(refund_id)
     }
@@ -265,7 +279,46 @@ impl RefundManager {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Refund(refund_id), &refund);
+            .set(&DataKey::Refund(refund_id.clone()), &refund);
+
+        // Issue #27: emit REFUND/COMPLETED event
+        env.events().publish(
+            (Symbol::new(env, "REFUND"), Symbol::new(env, "COMPLETED")),
+            (refund.payment_id, refund_id, refund.amount),
+        );
+
+        Ok(())
+    }
+
+    /// Reject a pending refund (operator only). Emits REFUND/REJECTED (issue #27).
+    pub fn reject_refund(env: Env, operator: Address, refund_id: String) -> Result<(), Error> {
+        operator.require_auth();
+        let has_settlement =
+            AccessControl::has_role(&env, &role_settlement_operator(&env), &operator);
+        let has_oracle = AccessControl::has_role(&env, &role_oracle(&env), &operator);
+
+        if !has_settlement && !has_oracle {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut refund = Self::get_refund_internal(&env, &refund_id)?;
+
+        if refund.status != RefundStatus::Pending {
+            return Err(Error::RefundAlreadyProcessed);
+        }
+
+        refund.status = RefundStatus::Rejected;
+        refund.processed_at = Some(env.ledger().timestamp());
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Refund(refund_id.clone()), &refund);
+
+        // Issue #27: emit REFUND/REJECTED event
+        env.events().publish(
+            (Symbol::new(&env, "REFUND"), Symbol::new(&env, "REJECTED")),
+            (refund.payment_id, refund_id, refund.amount),
+        );
 
         Ok(())
     }
@@ -352,7 +405,13 @@ impl RefundManager {
         payment_disputes.push_back(dispute_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::PaymentDisputes(payment_id), &payment_disputes);
+            .set(&DataKey::PaymentDisputes(payment_id.clone()), &payment_disputes);
+
+        // Issue #27: emit DISPUTE/OPENED event
+        env.events().publish(
+            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "OPENED")),
+            (payment_id, dispute_id.clone(), amount),
+        );
 
         Ok(dispute_id)
     }
@@ -378,7 +437,13 @@ impl RefundManager {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Dispute(dispute_id), &dispute);
+            .set(&DataKey::Dispute(dispute_id.clone()), &dispute);
+
+        // Issue #27: emit DISPUTE/UNDER_REVIEW event
+        env.events().publish(
+            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "UNDER_REVIEW")),
+            (dispute.payment_id, dispute_id, dispute.amount),
+        );
 
         Ok(())
     }
@@ -427,7 +492,13 @@ impl RefundManager {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Dispute(dispute_id), &dispute);
+            .set(&DataKey::Dispute(dispute_id.clone()), &dispute);
+
+        // Issue #27: emit DISPUTE/RESOLVED event
+        env.events().publish(
+            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "RESOLVED")),
+            (dispute.payment_id, dispute_id, dispute.amount),
+        );
 
         Ok(refund_id)
     }
@@ -460,7 +531,13 @@ impl RefundManager {
 
         env.storage()
             .persistent()
-            .set(&DataKey::Dispute(dispute_id), &dispute);
+            .set(&DataKey::Dispute(dispute_id.clone()), &dispute);
+
+        // Issue #27: emit DISPUTE/REJECTED event
+        env.events().publish(
+            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "REJECTED")),
+            (dispute.payment_id, dispute_id, dispute.amount),
+        );
 
         Ok(())
     }

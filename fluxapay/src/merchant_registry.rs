@@ -3,13 +3,25 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, 
 #[contract]
 pub struct MerchantRegistry;
 
+/// KYC tier for merchants, replacing the binary `verified: bool` field.
+/// Allows payment limits and settlement schedules to vary by tier.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KycTier {
+    Unverified,
+    Basic,
+    Full,
+    Business,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Merchant {
     pub merchant_id: Address,
     pub business_name: String,
     pub settlement_currency: String,
-    pub verified: bool,
+    /// KYC tier replaces the old `verified: bool` field.
+    pub kyc_tier: KycTier,
     pub active: bool,
     pub created_at: u64,
 }
@@ -63,7 +75,7 @@ impl MerchantRegistry {
             merchant_id: merchant_id.clone(),
             business_name,
             settlement_currency,
-            verified: false,
+            kyc_tier: KycTier::Unverified,
             active: true,
             created_at: env.ledger().timestamp(),
         };
@@ -109,7 +121,7 @@ impl MerchantRegistry {
         Self::get_merchant_internal(&env, &merchant_id)
     }
 
-    /// Verify merchant (admin only)
+    /// Verify merchant (admin only) — sets KycTier::Basic for backward compatibility.
     pub fn verify_merchant(env: Env, admin: Address, merchant_id: Address) -> Result<(), Error> {
         admin.require_auth();
 
@@ -124,7 +136,36 @@ impl MerchantRegistry {
         }
 
         let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
-        merchant.verified = true;
+        merchant.kyc_tier = KycTier::Basic;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Merchant(merchant_id), &merchant);
+
+        Ok(())
+    }
+
+    /// Set a specific KYC tier for a merchant (admin only).
+    pub fn set_kyc_tier(
+        env: Env,
+        admin: Address,
+        merchant_id: Address,
+        tier: KycTier,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+
+        let stored_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
+
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        merchant.kyc_tier = tier;
 
         env.storage()
             .persistent()

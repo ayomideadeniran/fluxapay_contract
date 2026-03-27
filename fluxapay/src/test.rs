@@ -379,3 +379,49 @@ fn test_create_payment_requires_auth() {
         &expires_at,
     );
 }
+
+/// Issue #37: verify role membership list integrity.
+#[test]
+fn test_get_role_members() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (admin, client) = setup_refund_manager(&env);
+
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let oracle_role = role_oracle(&env);
+
+    // Initially no oracle members
+    let members = client.get_role_members(&oracle_role);
+    assert_eq!(members.len(), 0);
+
+    // Grant oracle to oracle1
+    client.grant_role(&admin, &oracle_role, &oracle1);
+    let members = client.get_role_members(&oracle_role);
+    assert_eq!(members.len(), 1);
+    assert_eq!(members.get(0), Some(oracle1.clone()));
+
+    // Grant oracle to oracle2
+    client.grant_role(&admin, &oracle_role, &oracle2);
+    let members = client.get_role_members(&oracle_role);
+    assert_eq!(members.len(), 2);
+
+    // Revoke oracle1 — list should shrink
+    client.revoke_role(&admin, &oracle_role, &oracle1);
+    let members = client.get_role_members(&oracle_role);
+    assert_eq!(members.len(), 1);
+    assert_eq!(members.get(0), Some(oracle2.clone()));
+}
+
+/// Issue #37: admin is automatically in the ADMIN role members list after initialize.
+#[test]
+fn test_admin_in_role_members_after_init() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (admin, client) = setup_refund_manager(&env);
+
+    let admin_role = role_admin(&env);
+    let members = client.get_role_members(&admin_role);
+    assert_eq!(members.len(), 1);
+    assert_eq!(members.get(0), Some(admin));
+}
