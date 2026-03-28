@@ -98,7 +98,7 @@ fn test_create_dispute_without_disputer_signature() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
+#[should_panic(expected = "Error(Contract, #1)")]
 fn test_process_refund_without_operator_role() {
     let env = Env::default();
     env.mock_all_auths();

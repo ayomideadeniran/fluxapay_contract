@@ -41,7 +41,7 @@ fn test_create_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -92,7 +92,7 @@ fn test_review_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -142,7 +142,7 @@ fn test_resolve_dispute_with_refund() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -205,7 +205,7 @@ fn test_reject_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -253,7 +253,7 @@ fn test_get_payment_disputes() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -290,12 +290,12 @@ fn test_get_payment_disputes() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #3)")]
+#[should_panic(expected = "Error(Contract, #406)")]
 fn test_dispute_invalid_amount() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (_, payment_client, refund_client) = setup_contracts(&env);
+    let (admin, payment_client, refund_client) = setup_contracts(&env);
     let merchant = Address::generate(&env);
     let customer = Address::generate(&env);
 
@@ -306,7 +306,7 @@ fn test_dispute_invalid_amount() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -343,7 +343,7 @@ fn test_resolve_dispute_with_only_operator_auth() {
 
     let payment_id = String::from_str(&env, "pay_auth_test");
     let amount = 500i128;
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,

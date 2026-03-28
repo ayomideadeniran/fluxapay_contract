@@ -34,7 +34,7 @@ fn setup_refund_manager(env: &Env) -> (Address, RefundManagerClient<'_>) {
 fn test_create_payment() {
     let env = Env::default();
     env.mock_all_auths();
-    let (_admin, client) = setup_payment_processor(&env);
+    let (admin, client) = setup_payment_processor(&env);
 
     let payment_id = String::from_str(&env, "payment_123");
     let merchant_id = Address::generate(&env);
@@ -42,6 +42,7 @@ fn test_create_payment() {
     let currency = Symbol::new(&env, "USDC");
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     let payment = client.create_payment(
         &payment_id,
@@ -70,6 +71,7 @@ fn test_verify_payment_success() {
     let merchant_id = Address::generate(&env);
     let amount = 1000000000i128;
     let expires_at = env.ledger().timestamp() + 3600;
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     client.create_payment(
         &payment_id,
@@ -83,7 +85,7 @@ fn test_verify_payment_success() {
     let payer_address = Address::generate(&env);
     let transaction_hash = BytesN::<32>::random(&env);
     let oracle = Address::generate(&env);
-    client.payment_grant_role(&admin, &role_oracle(&env), &oracle);
+    client.grant_role(&admin, &role_oracle(&env), &oracle);
 
     let status = client.verify_payment(
         &oracle,
@@ -102,7 +104,7 @@ fn test_verify_payment_success() {
 fn test_get_merchant_payments_index_and_pagination() {
     let env = Env::default();
     env.mock_all_auths();
-    let (_admin, client) = setup_payment_processor(&env);
+    let (admin, client) = setup_payment_processor(&env);
 
     let merchant_id = Address::generate(&env);
     let currency = Symbol::new(&env, "USDC");
@@ -113,6 +115,7 @@ fn test_get_merchant_payments_index_and_pagination() {
     let payment_id_2 = String::from_str(&env, "merchant_pay_2");
     let payment_id_3 = String::from_str(&env, "merchant_pay_3");
 
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
     client.create_payment(
         &payment_id_1,
         &merchant_id,
@@ -154,11 +157,12 @@ fn test_get_merchant_payments_index_and_pagination() {
 fn test_cancel_payment_before_expiry_by_merchant() {
     let env = Env::default();
     env.mock_all_auths();
-    let (_admin, client) = setup_payment_processor(&env);
+    let (admin, client) = setup_payment_processor(&env);
 
     let payment_id = String::from_str(&env, "cancel_before_expiry");
     let merchant_id = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     client.create_payment(
         &payment_id,
@@ -179,11 +183,12 @@ fn test_cancel_payment_before_expiry_by_merchant() {
 fn test_expire_payment_after_deadline() {
     let env = Env::default();
     env.mock_all_auths();
-    let (_admin, client) = setup_payment_processor(&env);
+    let (admin, client) = setup_payment_processor(&env);
 
     let payment_id = String::from_str(&env, "expire_after_deadline");
     let merchant_id = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 10;
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     client.create_payment(
         &payment_id,
@@ -245,7 +250,7 @@ fn test_process_refund() {
     );
 
     let operator = Address::generate(&env);
-    client.refund_grant_role(&admin, &role_settlement_operator(&env), &operator);
+    client.grant_role(&admin, &role_settlement_operator(&env), &operator);
 
     client.process_refund(&operator, &refund_id);
 
@@ -264,8 +269,8 @@ fn test_initialize_contract() {
     let client = RefundManagerClient::new(&env, &contract_id);
     client.initialize_refund_manager(&admin, &usdc_token);
 
-    assert_eq!(client.refund_get_admin(), Some(admin.clone()));
-    assert!(client.refund_has_role(&role_admin(&env), &admin));
+    assert_eq!(client.get_admin(), Some(admin.clone()));
+    assert!(client.has_role(&role_admin(&env), &admin));
 }
 
 #[test]
@@ -276,8 +281,8 @@ fn test_grant_role() {
     let account = Address::generate(&env);
     let role = role_oracle(&env);
 
-    client.refund_grant_role(&admin, &role, &account);
-    assert!(client.refund_has_role(&role, &account));
+    client.grant_role(&admin, &role, &account);
+    assert!(client.has_role(&role, &account));
 }
 
 #[test]
@@ -287,9 +292,9 @@ fn test_transfer_admin() {
     let (current_admin, client) = setup_refund_manager(&env);
     let new_admin = Address::generate(&env);
 
-    client.refund_transfer_admin(&current_admin, &new_admin);
-    assert!(client.refund_has_role(&role_admin(&env), &new_admin));
-    assert_eq!(client.refund_get_admin(), Some(new_admin));
+    client.transfer_admin(&current_admin, &new_admin);
+    assert!(client.has_role(&role_admin(&env), &new_admin));
+    assert_eq!(client.get_admin(), Some(new_admin));
 }
 
 #[test]
@@ -373,7 +378,7 @@ fn test_create_refund_requires_auth() {
 #[should_panic(expected = "HostError: Error(Auth, InvalidAction)")]
 fn test_create_payment_requires_auth() {
     let env = Env::default();
-    let (_admin, client) = setup_payment_processor(&env);
+    let (admin, client) = setup_payment_processor(&env);
 
     let payment_id = String::from_str(&env, "payment_123");
     let merchant_id = Address::generate(&env);

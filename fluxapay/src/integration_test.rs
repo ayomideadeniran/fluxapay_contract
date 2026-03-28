@@ -65,7 +65,7 @@ fn test_happy_path_flow() {
     let amount = 1000i128;
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -126,7 +126,7 @@ fn test_settlement_path() {
 
     let payment_id = String::from_str(&env, "PAY_SETTLE");
     let amount = 2000i128;
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
@@ -165,7 +165,7 @@ fn test_failure_and_expiration_path() {
     let amount = 500i128;
     let expires_at = env.ledger().timestamp() + 100;
 
-    payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
