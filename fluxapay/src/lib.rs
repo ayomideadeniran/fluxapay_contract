@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    bytes, contract, contracterror, contractimpl, contracttype, token, vec, Address, Bytes,
-    BytesN, Env, MuxedAddress, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, token, vec, Address, BytesN, Env,
+    MuxedAddress, String, Symbol, Vec,
 };
 
 mod access_control;
@@ -1073,30 +1073,5 @@ pub use payment_link::{PaymentLink, PaymentLinkManager, PaymentLinkManagerClient
 mod payment_link_test;
 mod test;
 
-pub fn format_id(env: &Env, prefix: &str, n: u64) -> String {
-    let mut result = Bytes::new(env);
-    for byte in prefix.as_bytes() {
-        result.push_back(*byte);
-    }
-
-    let mut temp = Bytes::new(env);
-    let mut num = n;
-    loop {
-        temp.push_back((num % 10) as u8 + 48);
-        num /= 10;
-        if num == 0 {
-            break;
-        }
-    }
-    let len = temp.len();
-    for i in 0..len {
-        result.push_back(temp.get(len - i - 1).unwrap());
-    }
-
-    let mut arr = [0u8; 64];
-    let final_len = result.len().min(64);
-    for i in 0..final_len {
-        arr[i as usize] = result.get(i).unwrap();
-    }
-    String::from_bytes(env, &arr[..final_len as usize])
-}
+pub mod utils;
+pub use utils::format_id;
