@@ -311,7 +311,9 @@ fn test_unverified_merchant_cannot_create_payment() {
 
     let admin = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
 
     // Initialize contracts
     refund_client.initialize_refund_manager(&admin, &usdc_token);
@@ -341,6 +343,8 @@ fn test_unverified_merchant_cannot_create_payment() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 }
 
@@ -359,7 +363,9 @@ fn test_verified_merchant_can_create_payment() {
 
     let admin = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
 
     // Initialize contracts
     refund_client.initialize_refund_manager(&admin, &usdc_token);
@@ -391,6 +397,8 @@ fn test_verified_merchant_can_create_payment() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);

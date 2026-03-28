@@ -280,6 +280,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "memo"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "memo_type"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "merchant_id"
                       },
                       "val": {

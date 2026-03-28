@@ -27,7 +27,9 @@ fn setup_contracts(
 
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     refund_client.initialize_refund_manager(&admin, &usdc_token);
     let token_admin_client = token::StellarAssetClient::new(env, &usdc_token);
     token_admin_client.mint(&refund_manager, &1_000_000_000_000i128);

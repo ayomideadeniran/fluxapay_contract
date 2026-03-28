@@ -42,13 +42,13 @@
               "function_name": "create_payment",
               "args": [
                 {
-                  "string": "partial_pay"
+                  "string": "payment_memo_persist"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "1000000000"
+                  "i128": "1500"
                 },
                 {
                   "symbol": "USDC"
@@ -59,8 +59,12 @@
                 {
                   "u64": "3600"
                 },
-                "void",
-                "void"
+                {
+                  "string": "INVOICE-999"
+                },
+                {
+                  "string": "Text"
+                }
               ]
             }
           },
@@ -106,16 +110,16 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 },
                 {
-                  "string": "partial_pay"
+                  "string": "payment_memo_persist"
                 },
                 {
-                  "bytes": "26fcd0761c9c51219b5c3c19004d326143c84467020d6e593583031e1316a310"
+                  "bytes": "218efa021e174ae9f1d9e39f69a83b70a2e84cb078c7b9f90a111891919da3da"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "i128": "999999900"
+                  "i128": "1500"
                 }
               ]
             }
@@ -213,7 +217,7 @@
                 "val": {
                   "vec": [
                     {
-                      "string": "partial_pay"
+                      "string": "payment_memo_persist"
                     }
                   ]
                 }
@@ -273,7 +277,7 @@
                   "symbol": "Payment"
                 },
                 {
-                  "string": "partial_pay"
+                  "string": "payment_memo_persist"
                 }
               ]
             },
@@ -293,7 +297,7 @@
                       "symbol": "Payment"
                     },
                     {
-                      "string": "partial_pay"
+                      "string": "payment_memo_persist"
                     }
                   ]
                 },
@@ -305,7 +309,7 @@
                         "symbol": "amount"
                       },
                       "val": {
-                        "i128": "1000000000"
+                        "i128": "1500"
                       }
                     },
                     {
@@ -313,7 +317,7 @@
                         "symbol": "amount_received"
                       },
                       "val": {
-                        "i128": "999999900"
+                        "i128": "1500"
                       }
                     },
                     {
@@ -360,13 +364,17 @@
                       "key": {
                         "symbol": "memo"
                       },
-                      "val": "void"
+                      "val": {
+                        "string": "INVOICE-999"
+                      }
                     },
                     {
                       "key": {
                         "symbol": "memo_type"
                       },
-                      "val": "void"
+                      "val": {
+                        "string": "Text"
+                      }
                     },
                     {
                       "key": {
@@ -389,7 +397,7 @@
                         "symbol": "payment_id"
                       },
                       "val": {
-                        "string": "partial_pay"
+                        "string": "payment_memo_persist"
                       }
                     },
                     {
@@ -399,7 +407,7 @@
                       "val": {
                         "vec": [
                           {
-                            "symbol": "PartiallyPaid"
+                            "symbol": "Confirmed"
                           }
                         ]
                       }
@@ -409,7 +417,7 @@
                         "symbol": "transaction_hash"
                       },
                       "val": {
-                        "bytes": "26fcd0761c9c51219b5c3c19004d326143c84467020d6e593583031e1316a310"
+                        "bytes": "218efa021e174ae9f1d9e39f69a83b70a2e84cb078c7b9f90a111891919da3da"
                       }
                     }
                   ]

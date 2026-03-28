@@ -101,7 +101,9 @@
                 },
                 {
                   "u64": "3600"
-                }
+                },
+                "void",
+                "void"
               ]
             }
           },
@@ -150,7 +152,7 @@
                   "string": "payment_005"
                 },
                 {
-                  "bytes": "f532aa1d036f3913572143b41081e4025043d3b92cbe8cc12c971d7783917ffc"
+                  "bytes": "6423639f2635383fa7cca9dbca84b5212f20b62be18b05b3868ff99fbcba4692"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOLZM"
@@ -395,6 +397,45 @@
             "key": {
               "vec": [
                 {
+                  "symbol": "Paused"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "Paused"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "bool": false
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          4095
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
                   "symbol": "Payment"
                 },
                 {
@@ -483,6 +524,18 @@
                     },
                     {
                       "key": {
+                        "symbol": "memo"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "memo_type"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
                         "symbol": "merchant_id"
                       },
                       "val": {
@@ -522,7 +575,7 @@
                         "symbol": "transaction_hash"
                       },
                       "val": {
-                        "bytes": "f532aa1d036f3913572143b41081e4025043d3b92cbe8cc12c971d7783917ffc"
+                        "bytes": "6423639f2635383fa7cca9dbca84b5212f20b62be18b05b3868ff99fbcba4692"
                       }
                     }
                   ]

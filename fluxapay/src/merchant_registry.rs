@@ -1,8 +1,8 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, vec, Vec,
+    contract, contracterror, contractimpl, contracttype, vec, Address, Env, String, Symbol, Vec,
 };
 
-use crate::{Error, DataKey};
+use crate::{DataKey, Error};
 
 #[contract]
 pub struct MerchantRegistry;
@@ -62,7 +62,9 @@ impl MerchantRegistry {
         if env.storage().persistent().has(&MerchantDataKey::Admin) {
             return Err(MerchantError::AdminAlreadySet);
         }
-        env.storage().persistent().set(&MerchantDataKey::Admin, &admin);
+        env.storage()
+            .persistent()
+            .set(&MerchantDataKey::Admin, &admin);
         Ok(())
     }
 
@@ -99,7 +101,7 @@ impl MerchantRegistry {
         env.storage()
             .persistent()
             .set(&MerchantDataKey::Merchant(merchant_id.clone()), &merchant);
-        
+
         Self::add_to_merchant_list(&env, &merchant_id);
 
         Ok(())
@@ -154,7 +156,11 @@ impl MerchantRegistry {
 
     /// Verify merchant (admin only) — sets KycTier::Basic for backward compatibility.
     /// If a RefundManager address is configured, also grants the MERCHANT role there.
-    pub fn verify_merchant(env: Env, admin: Address, merchant_id: Address) -> Result<(), MerchantError> {
+    pub fn verify_merchant(
+        env: Env,
+        admin: Address,
+        merchant_id: Address,
+    ) -> Result<(), MerchantError> {
         admin.require_auth();
 
         let stored_admin: Address = env
@@ -181,13 +187,9 @@ impl MerchantRegistry {
             .get::<MerchantDataKey, Address>(&MerchantDataKey::RefundManagerAddress)
         {
             let rm_client = crate::RefundManagerClient::new(&env, &refund_manager_addr);
-            let _ = rm_client.try_grant_role(
-                &admin,
-                &Symbol::new(&env, "MERCHANT"),
-                &merchant_id,
-            );
+            let _ = rm_client.try_grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant_id);
         }
-        
+
         env.events().publish(
             (Symbol::new(&env, "MERCHANT"), Symbol::new(&env, "VERIFIED")),
             merchant_id,
@@ -251,11 +253,7 @@ impl MerchantRegistry {
     }
 
     /// Get all registered merchants with pagination support
-    pub fn get_all_merchants(
-        env: Env,
-        offset: u32,
-        limit: u32,
-    ) -> Vec<Merchant> {
+    pub fn get_all_merchants(env: Env, offset: u32, limit: u32) -> Vec<Merchant> {
         let merchant_ids: Vec<Address> = env
             .storage()
             .persistent()

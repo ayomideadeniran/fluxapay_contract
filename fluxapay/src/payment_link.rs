@@ -112,7 +112,11 @@ impl PaymentLinkManager {
         Ok(payment_id)
     }
 
-    pub fn deactivate_link(env: Env, merchant: Address, link_id: String) -> Result<(), crate::Error> {
+    pub fn deactivate_link(
+        env: Env,
+        merchant: Address,
+        link_id: String,
+    ) -> Result<(), crate::Error> {
         merchant.require_auth();
 
         let mut link = Self::get_link_internal(&env, &link_id)?;

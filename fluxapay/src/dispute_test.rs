@@ -15,7 +15,9 @@ fn setup_contracts(env: &Env) -> (Address, PaymentProcessorClient<'_>, RefundMan
     let payment_client = PaymentProcessorClient::new(env, &payment_processor);
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     refund_client.initialize_refund_manager(&admin, &usdc_token);
     let token_admin_client = token::StellarAssetClient::new(env, &usdc_token);
     token_admin_client.mint(&refund_manager, &1_000_000_000_000i128);
@@ -41,13 +43,16 @@ fn test_create_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     // Verify payment
@@ -92,13 +97,16 @@ fn test_review_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -142,13 +150,16 @@ fn test_resolve_dispute_with_refund() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -205,13 +216,16 @@ fn test_reject_dispute() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -253,13 +267,16 @@ fn test_get_payment_disputes() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -306,13 +323,16 @@ fn test_dispute_invalid_amount() {
     let deposit_address = Address::generate(&env);
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     // Try to create dispute with invalid amount - should fail
@@ -343,13 +363,16 @@ fn test_resolve_dispute_with_only_operator_auth() {
 
     let payment_id = String::from_str(&env, "pay_auth_test");
     let amount = 500i128;
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &Symbol::new(&env, "USDC"),
         &merchant,
         &(env.ledger().timestamp() + 3600),
+        &None::<String>,
+        &None::<String>,
     );
 
     let oracle = Address::generate(&env);

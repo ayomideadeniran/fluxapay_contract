@@ -28,7 +28,9 @@ fn setup_integration(
 
     let admin = Address::generate(env);
     let token_admin = Address::generate(env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     refund_client.initialize_refund_manager(&admin, &usdc_token);
     let token_admin_client = token::StellarAssetClient::new(env, &usdc_token);
     token_admin_client.mint(&refund_manager, &1_000_000_000_000i128);
@@ -65,13 +67,16 @@ fn test_happy_path_flow() {
     let amount = 1000i128;
     let expires_at = env.ledger().timestamp() + 3600;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let tx_hash = BytesN::<32>::random(&env);
@@ -126,13 +131,16 @@ fn test_settlement_path() {
 
     let payment_id = String::from_str(&env, "PAY_SETTLE");
     let amount = 2000i128;
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &(env.ledger().timestamp() + 3600),
+        &None::<String>,
+        &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -165,13 +173,16 @@ fn test_failure_and_expiration_path() {
     let amount = 500i128;
     let expires_at = env.ledger().timestamp() + 100;
 
-    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant); payment_client.create_payment(
+    payment_client.grant_role(&admin, &Symbol::new(&env, "MERCHANT"), &merchant);
+    payment_client.create_payment(
         &payment_id,
         &merchant,
         &amount,
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     // Jump forward in time

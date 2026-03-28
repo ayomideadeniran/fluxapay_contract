@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{PaymentLink, PaymentLinkManager, PaymentLinkManagerClient, Error};
+use crate::{Error, PaymentLink, PaymentLinkManager, PaymentLinkManagerClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
     Address, Env, String, Symbol,

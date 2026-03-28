@@ -42,13 +42,13 @@
               "function_name": "create_payment",
               "args": [
                 {
-                  "string": "partial_pay"
+                  "string": "payment_verify_paused"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "1000000000"
+                  "i128": "1000"
                 },
                 {
                   "symbol": "USDC"
@@ -75,16 +75,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "grant_role",
+              "function_name": "set_paused",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
                 },
                 {
-                  "symbol": "ORACLE"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  "bool": true
                 }
               ]
             }
@@ -95,27 +92,21 @@
     ],
     [
       [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
         {
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "verify_payment",
+              "function_name": "grant_role",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                {
+                  "symbol": "ORACLE"
+                },
+                {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "string": "partial_pay"
-                },
-                {
-                  "bytes": "26fcd0761c9c51219b5c3c19004d326143c84467020d6e593583031e1316a310"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                },
-                {
-                  "i128": "999999900"
                 }
               ]
             }
@@ -213,7 +204,7 @@
                 "val": {
                   "vec": [
                     {
-                      "string": "partial_pay"
+                      "string": "payment_verify_paused"
                     }
                   ]
                 }
@@ -254,7 +245,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "bool": false
+                  "bool": true
                 }
               }
             },
@@ -273,7 +264,7 @@
                   "symbol": "Payment"
                 },
                 {
-                  "string": "partial_pay"
+                  "string": "payment_verify_paused"
                 }
               ]
             },
@@ -293,7 +284,7 @@
                       "symbol": "Payment"
                     },
                     {
-                      "string": "partial_pay"
+                      "string": "payment_verify_paused"
                     }
                   ]
                 },
@@ -305,24 +296,20 @@
                         "symbol": "amount"
                       },
                       "val": {
-                        "i128": "1000000000"
+                        "i128": "1000"
                       }
                     },
                     {
                       "key": {
                         "symbol": "amount_received"
                       },
-                      "val": {
-                        "i128": "999999900"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
                         "symbol": "confirmed_at"
                       },
-                      "val": {
-                        "u64": "0"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
@@ -380,16 +367,14 @@
                       "key": {
                         "symbol": "payer_address"
                       },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                      }
+                      "val": "void"
                     },
                     {
                       "key": {
                         "symbol": "payment_id"
                       },
                       "val": {
-                        "string": "partial_pay"
+                        "string": "payment_verify_paused"
                       }
                     },
                     {
@@ -399,7 +384,7 @@
                       "val": {
                         "vec": [
                           {
-                            "symbol": "PartiallyPaid"
+                            "symbol": "Pending"
                           }
                         ]
                       }
@@ -408,9 +393,7 @@
                       "key": {
                         "symbol": "transaction_hash"
                       },
-                      "val": {
-                        "bytes": "26fcd0761c9c51219b5c3c19004d326143c84467020d6e593583031e1316a310"
-                      }
+                      "val": "void"
                     }
                   ]
                 }
@@ -418,7 +401,7 @@
             },
             "ext": "v0"
           },
-          6311999
+          120960
         ]
       ],
       [
@@ -822,6 +805,39 @@
       [
         {
           "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+            "key": {
+              "ledger_key_nonce": {
+                "nonce": "4837995959683129791"
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": "4837995959683129791"
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          6311999
+        ]
+      ],
+      [
+        {
+          "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
@@ -841,39 +857,6 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": "5541220902715666415"
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": "4837995959683129791"
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": "4837995959683129791"
                   }
                 },
                 "durability": "temporary",

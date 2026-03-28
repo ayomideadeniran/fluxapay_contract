@@ -6,11 +6,13 @@ use soroban_sdk::{
 
 mod access_control;
 pub mod fx_oracle;
-use access_control::{role_merchant, role_oracle, role_settlement_operator, AccessControl};
+use access_control::{
+    role_admin, role_merchant, role_oracle, role_settlement_operator, AccessControl,
+};
 // Re-export for tests
 #[allow(unused_imports)]
 pub use access_control::AccessControlDataKey;
-use fx_oracle::{FXOracle, FXOracleClient, FXOracleError, RateData};
+pub use fx_oracle::{FXOracle, FXOracleClient, FXOracleError};
 
 #[contract]
 pub struct PaymentProcessor;
@@ -34,6 +36,10 @@ pub struct PaymentCharge {
     pub expires_at: u64,
     /// Actual amount received on-chain; set by verify_payment for reconciliation.
     pub amount_received: Option<i128>,
+    /// Optional memo for Stellar payment routing.
+    pub memo: Option<String>,
+    /// Optional memo type: Text, Id, Hash, or Return.
+    pub memo_type: Option<String>,
 }
 
 #[contracttype]
@@ -118,6 +124,7 @@ pub enum Error {
     PaymentAlreadyProcessed = 14,
     AccessControlError = 15,
     RefundExceedsPayment = 16,
+    ContractPaused = 17,
 }
 
 #[contracttype]
@@ -131,6 +138,7 @@ pub enum DataKey {
     PaymentDisputes(String),
     DisputeCounter,
     UsdcToken,
+    Paused,
 }
 
 const SHORT_LIVE_TTL: u32 = 120_960; // ~1 week at 5s/ledger
@@ -217,6 +225,8 @@ impl RefundManager {
                 confirmed_at: None,
                 expires_at: 0,
                 amount_received: None,
+                memo: None,
+                memo_type: None,
             };
             env.storage()
                 .persistent()
@@ -293,10 +303,15 @@ impl RefundManager {
 
         let mut payment_refunds = Self::get_payment_refunds_internal(env, &payment_id);
         payment_refunds.push_back(refund_id.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::PaymentRefunds(payment_id.clone()), &payment_refunds);
-        Self::bump_ttl(&env, &DataKey::PaymentRefunds(payment_id.clone()), LONG_LIVE_TTL);
+        env.storage().persistent().set(
+            &DataKey::PaymentRefunds(payment_id.clone()),
+            &payment_refunds,
+        );
+        Self::bump_ttl(
+            &env,
+            &DataKey::PaymentRefunds(payment_id.clone()),
+            LONG_LIVE_TTL,
+        );
 
         Self::bump_refund_ttl(&env, &refund_id, &refund.status);
 
@@ -342,7 +357,10 @@ impl RefundManager {
 
         let from = env.current_contract_address();
         let to: MuxedAddress = (&refund.requester).into();
-        if token_client.try_transfer(&from, &to, &refund.amount).is_err() {
+        if token_client
+            .try_transfer(&from, &to, &refund.amount)
+            .is_err()
+        {
             return Ok(());
         }
 
@@ -477,10 +495,15 @@ impl RefundManager {
 
         let mut payment_disputes = Self::get_payment_disputes_internal(&env, &payment_id);
         payment_disputes.push_back(dispute_id.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::PaymentDisputes(payment_id.clone()), &payment_disputes);
-        Self::bump_ttl(&env, &DataKey::PaymentDisputes(payment_id.clone()), LONG_LIVE_TTL);
+        env.storage().persistent().set(
+            &DataKey::PaymentDisputes(payment_id.clone()),
+            &payment_disputes,
+        );
+        Self::bump_ttl(
+            &env,
+            &DataKey::PaymentDisputes(payment_id.clone()),
+            LONG_LIVE_TTL,
+        );
 
         Self::bump_dispute_ttl(&env, &dispute_id, &dispute.status);
 
@@ -519,7 +542,10 @@ impl RefundManager {
 
         // Issue #27: emit DISPUTE/UNDER_REVIEW event
         env.events().publish(
-            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "UNDER_REVIEW")),
+            (
+                Symbol::new(&env, "DISPUTE"),
+                Symbol::new(&env, "UNDER_REVIEW"),
+            ),
             (dispute.payment_id, dispute_id, dispute.amount),
         );
 
@@ -719,6 +745,8 @@ impl RefundManager {
 impl PaymentProcessor {
     pub fn initialize_payment_processor(env: Env, admin: Address) {
         AccessControl::initialize(&env, admin);
+        // Initialize paused state to false
+        env.storage().persistent().set(&DataKey::Paused, &false);
     }
 
     pub fn grant_role(
@@ -730,6 +758,50 @@ impl PaymentProcessor {
         AccessControl::grant_role(&env, admin, role, account).map_err(|_| Error::AccessControlError)
     }
 
+    /// Set the paused state (admin only). When paused, create_payment, verify_payment, and cancel_payment are blocked.
+    pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        admin.require_auth();
+
+        if !AccessControl::has_role(&env, &role_admin(&env), &admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage().persistent().set(&DataKey::Paused, &paused);
+
+        let event_name = if paused {
+            Symbol::new(&env, "PAUSED")
+        } else {
+            Symbol::new(&env, "UNPAUSED")
+        };
+
+        env.events()
+            .publish((Symbol::new(&env, "CONTRACT"), event_name), admin);
+
+        Ok(())
+    }
+
+    /// Get the current paused state.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    /// Check if contract is paused and return error if so.
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        let paused: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
     #[allow(deprecated)]
     pub fn create_payment(
         env: Env,
@@ -739,7 +811,10 @@ impl PaymentProcessor {
         currency: Symbol,
         deposit_address: Address,
         expires_at: u64,
+        memo: Option<String>,
+        memo_type: Option<String>,
     ) -> Result<PaymentCharge, Error> {
+        Self::require_not_paused(&env)?;
         merchant_id.require_auth();
 
         // Verify that the merchant has the MERCHANT role (granted on verification)
@@ -776,6 +851,8 @@ impl PaymentProcessor {
             confirmed_at: None,
             expires_at,
             amount_received: None,
+            memo: memo.clone(),
+            memo_type: memo_type.clone(),
         };
 
         env.storage()
@@ -812,6 +889,7 @@ impl PaymentProcessor {
         payer_address: Address,
         amount_received: i128,
     ) -> Result<PaymentStatus, Error> {
+        Self::require_not_paused(&env)?;
         oracle.require_auth();
 
         if !AccessControl::has_role(&env, &role_oracle(&env), &oracle) {
@@ -865,11 +943,7 @@ impl PaymentProcessor {
         };
 
         env.events().publish(
-            (
-                Symbol::new(&env, "PAYMENT"),
-                event_name,
-                payment_id.clone(),
-            ),
+            (Symbol::new(&env, "PAYMENT"), event_name, payment_id.clone()),
             (payment.merchant_id, payment.amount, amount_received),
         );
 
@@ -912,6 +986,8 @@ impl PaymentProcessor {
 
     #[allow(deprecated)]
     pub fn cancel_payment(env: Env, authority: Address, payment_id: String) -> Result<(), Error> {
+        Self::require_not_paused(&env)?;
+
         let mut payment = Self::get_payment_internal(&env, &payment_id)?;
 
         if payment.status != PaymentStatus::Pending {
@@ -1065,10 +1141,14 @@ mod integration_test;
 pub mod merchant_registry;
 #[cfg(test)]
 mod merchant_registry_test;
+mod payment_link;
 #[cfg(test)]
 mod proptests;
-mod payment_link;
 pub use payment_link::{PaymentLink, PaymentLinkManager, PaymentLinkManagerClient};
+#[cfg(test)]
+mod memo_test;
+#[cfg(test)]
+mod pause_test;
 #[cfg(test)]
 mod payment_link_test;
 mod test;

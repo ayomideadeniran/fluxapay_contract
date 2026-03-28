@@ -21,7 +21,9 @@ fn setup_refund_manager(env: &Env) -> (Address, RefundManagerClient<'_>) {
     let admin = Address::generate(env);
 
     let token_admin = Address::generate(env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
     client.initialize_refund_manager(&admin, &usdc_token);
 
     let token_admin_client = token::StellarAssetClient::new(env, &usdc_token);
@@ -51,6 +53,8 @@ fn test_create_payment() {
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);
@@ -59,6 +63,8 @@ fn test_create_payment() {
     assert_eq!(payment.currency, currency);
     assert_eq!(payment.deposit_address, deposit_address);
     assert_eq!(payment.status, PaymentStatus::Pending);
+    assert_eq!(payment.memo, None);
+    assert_eq!(payment.memo_type, None);
 }
 
 #[test]
@@ -80,6 +86,8 @@ fn test_verify_payment_success() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let payer_address = Address::generate(&env);
@@ -120,6 +128,8 @@ fn test_verify_payment_partially_paid() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -160,6 +170,8 @@ fn test_verify_payment_overpaid() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -200,6 +212,8 @@ fn test_verify_payment_within_tolerance() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -244,6 +258,8 @@ fn test_get_merchant_payments_index_and_pagination() {
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
     client.create_payment(
         &payment_id_2,
@@ -252,6 +268,8 @@ fn test_get_merchant_payments_index_and_pagination() {
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
     client.create_payment(
         &payment_id_3,
@@ -260,6 +278,8 @@ fn test_get_merchant_payments_index_and_pagination() {
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     let all = client.get_merchant_payments(&merchant_id);
@@ -292,6 +312,8 @@ fn test_cancel_payment_before_expiry_by_merchant() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     client.cancel_payment(&merchant_id, &payment_id);
@@ -318,6 +340,8 @@ fn test_expire_payment_after_deadline() {
         &Symbol::new(&env, "USDC"),
         &Address::generate(&env),
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 
     env.ledger().set_timestamp(expires_at + 1);
@@ -340,7 +364,12 @@ fn test_create_and_get_refund() {
     let requester = Address::generate(&env);
 
     // Register payment so refund amount can be validated
-    client.register_payment(&payment_id, &merchant_id, &5000i128, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &5000i128,
+        &Symbol::new(&env, "USDC"),
+    );
 
     let refund_id = client.create_refund(&payment_id, &refund_amount, &reason, &requester);
     let refund = client.get_refund(&refund_id);
@@ -361,7 +390,12 @@ fn test_process_refund() {
     let refund_amount = 1000i128;
     let requester = Address::generate(&env);
 
-    client.register_payment(&payment_id, &merchant_id, &5000i128, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &5000i128,
+        &Symbol::new(&env, "USDC"),
+    );
 
     let refund_id = client.create_refund(
         &payment_id,
@@ -384,7 +418,9 @@ fn test_initialize_contract() {
     let env = Env::default();
     let admin = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let usdc_token = env.register_stellar_asset_contract_v2(token_admin).address();
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin)
+        .address();
 
     let contract_id = env.register(RefundManager, ());
     let client = RefundManagerClient::new(&env, &contract_id);
@@ -428,7 +464,12 @@ fn test_multiple_refunds_unique_ids() {
     let merchant_id = Address::generate(&env);
     let requester = Address::generate(&env);
 
-    client.register_payment(&payment_id, &merchant_id, &5000i128, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &5000i128,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // Create first refund
     let refund_id_1 = client.create_refund(
@@ -484,7 +525,12 @@ fn test_create_refund_requires_auth() {
     let merchant_id = Address::generate(&env);
     let requester = Address::generate(&env);
 
-    client.register_payment(&payment_id, &merchant_id, &5000i128, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &5000i128,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // This should panic because we're not mocking auth
     client.create_refund(
@@ -516,6 +562,8 @@ fn test_create_payment_requires_auth() {
         &currency,
         &deposit_address,
         &expires_at,
+        &None::<String>,
+        &None::<String>,
     );
 }
 
