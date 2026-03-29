@@ -126,6 +126,26 @@ Make stablecoin payments simple, practical, and accessible so merchants can sell
 Contributions are welcome!  
 Open an issue or submit a PR to help build Fluxapay.
 
+### Local Development Setup
+
+1. **Environment Variables**: Copy `.env.example` to `.env` and populate with your testnet credentials (do not commit `.env`):
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Stellar testnet keys and contract IDs
+   ```
+
+2. **Local Contract Invocation**: See [docs/local-invoke.md](docs/local-invoke.md) for step-by-step recipes to test `create_payment`, `register_merchant`, and other contract functions on testnet.
+
+3. **Running Tests**:
+   ```bash
+   cd fluxapay && make test
+   ```
+
+4. **Code Quality**: Format, lint, and audit before submitting:
+   ```bash
+   cd fluxapay && make fmt && cargo clippy --all-targets --all-features && cargo audit
+   ```
+
 ## Security
 
 Please refer to our [Security Policy](SECURITY.md) for information on reporting vulnerabilities and our current audit status.

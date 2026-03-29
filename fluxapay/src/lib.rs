@@ -260,10 +260,10 @@ impl RefundManager {
 
         // Validate refund amount does not exceed original payment amount
         // First try to get payment from local storage
-        let payment: PaymentCharge = if let Some(local_payment) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, PaymentCharge>(&DataKey::Payment(payment_id.clone()))
+        let payment: PaymentCharge = if let Some(local_payment) =
+            env.storage()
+                .persistent()
+                .get::<DataKey, PaymentCharge>(&DataKey::Payment(payment_id.clone()))
         {
             local_payment
         } else {
@@ -900,11 +900,14 @@ impl PaymentProcessor {
             .persistent()
             .get::<DataKey, Address>(&DataKey::MerchantRegistryAddress)
         {
-            let registry_client = crate::merchant_registry::MerchantRegistryClient::new(&env, &registry_address);
+            let registry_client =
+                crate::merchant_registry::MerchantRegistryClient::new(&env, &registry_address);
             match registry_client.try_get_merchant(&merchant_id) {
                 Ok(Ok(merchant)) => {
                     // Require merchant to be verified (not Unverified) and active
-                    if merchant.kyc_tier == crate::merchant_registry::KycTier::Unverified || !merchant.active {
+                    if merchant.kyc_tier == crate::merchant_registry::KycTier::Unverified
+                        || !merchant.active
+                    {
                         return Err(Error::Unauthorized);
                     }
                 }
