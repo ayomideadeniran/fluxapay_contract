@@ -2,8 +2,6 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, Env, String, Symbol, Vec,
 };
 
-use crate::{DataKey, Error};
-
 #[contract]
 pub struct MerchantRegistry;
 

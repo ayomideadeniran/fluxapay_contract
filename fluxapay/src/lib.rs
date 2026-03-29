@@ -125,12 +125,21 @@ pub enum Error {
     AccessControlError = 15,
     RefundExceedsPayment = 16,
     ContractPaused = 17,
+    RateLimitExceeded = 18,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MerchantCreateRateLimit {
+    pub last_payment_at: u64,
+    pub count: u32,
 }
 
 #[contracttype]
 pub enum DataKey {
     Payment(String),
     MerchantPayments(Address),
+    MerchantRateLimit(Address),
     Refund(String),
     PaymentRefunds(String),
     RefundCounter,
@@ -145,6 +154,8 @@ pub enum DataKey {
 const SHORT_LIVE_TTL: u32 = 120_960; // ~1 week at 5s/ledger
 const LONG_LIVE_TTL: u32 = 18_921_600; // ~3 years at 5s/ledger
 const TTL_BUMP_THRESHOLD_DIVISOR: u32 = 5;
+const CREATE_PAYMENT_WINDOW_SECS: u64 = 60;
+const CREATE_PAYMENT_MAX_PER_WINDOW: u32 = 30;
 
 #[contractimpl]
 impl RefundManager {
@@ -874,6 +885,36 @@ impl PaymentProcessor {
         Ok(())
     }
 
+    fn enforce_create_payment_rate_limit(env: &Env, merchant_id: &Address) -> Result<(), Error> {
+        let now = env.ledger().timestamp();
+        let key = DataKey::MerchantRateLimit(merchant_id.clone());
+
+        let mut state: MerchantCreateRateLimit = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(MerchantCreateRateLimit {
+                last_payment_at: now,
+                count: 0,
+            });
+
+        if now.saturating_sub(state.last_payment_at) >= CREATE_PAYMENT_WINDOW_SECS {
+            state.count = 0;
+        }
+
+        if state.count >= CREATE_PAYMENT_MAX_PER_WINDOW {
+            return Err(Error::RateLimitExceeded);
+        }
+
+        state.count = state.count.saturating_add(1);
+        state.last_payment_at = now;
+
+        env.storage().persistent().set(&key, &state);
+        Self::bump_ttl(env, &key, SHORT_LIVE_TTL);
+
+        Ok(())
+    }
+
     #[allow(deprecated)]
     pub fn create_payment(
         env: Env,
@@ -930,6 +971,8 @@ impl PaymentProcessor {
         if payment_id.is_empty() {
             return Err(Error::InvalidPaymentId);
         }
+
+        Self::enforce_create_payment_rate_limit(&env, &merchant_id)?;
 
         let payment = PaymentCharge {
             payment_id: payment_id.clone(),

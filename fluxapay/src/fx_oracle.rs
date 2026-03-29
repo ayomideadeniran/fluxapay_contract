@@ -1,4 +1,3 @@
-#![no_std]
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol};
 
 use crate::access_control::{role_admin, role_oracle, AccessControl};
