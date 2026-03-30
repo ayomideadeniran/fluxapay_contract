@@ -1094,8 +1094,25 @@ impl PaymentProcessor {
             return Err(Error::PaymentAlreadyProcessed);
         }
 
-        if env.ledger().timestamp() > payment.expires_at {
-            return Err(Error::Unauthorized);
+        // Ensure the current time is less than the expiry time; if not, mark as expired and return.
+        if env.ledger().timestamp() >= payment.expires_at {
+            payment.status = PaymentStatus::Expired;
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::Payment(payment_id.clone()), &payment);
+            Self::bump_payment_ttl(&env, &payment_id, &payment.status);
+
+            env.events().publish(
+                (
+                    Symbol::new(&env, "PAYMENT"),
+                    Symbol::new(&env, "EXPIRED"),
+                    payment_id.clone(),
+                ),
+                (payment.merchant_id, payment.amount),
+            );
+
+            return Ok(());
         }
 
         authority.require_auth();
