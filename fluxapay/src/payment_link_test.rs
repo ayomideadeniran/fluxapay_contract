@@ -1,7 +1,7 @@
 use crate::{PaymentLinkManager, PaymentLinkManagerClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    Address, Env, String, Symbol,
+    token, Address, Env, String, Symbol,
 };
 
 fn setup_payment_link(env: &Env) -> (Address, PaymentLinkManagerClient<'_>) {
@@ -30,6 +30,7 @@ fn test_create_link() {
         &description,
         &None,
         &None,
+        &false,
     );
 
     assert_eq!(id, link_id);
@@ -37,6 +38,7 @@ fn test_create_link() {
     assert_eq!(link.merchant_id, merchant);
     assert_eq!(link.amount, amount);
     assert!(link.active);
+    assert!(!link.direct_transfer);
 }
 
 #[test]
@@ -56,9 +58,10 @@ fn test_use_link_fixed_amount() {
         &String::from_str(&env, "Fixed"),
         &None,
         &None,
+        &false,
     );
 
-    let payment_id = client.use_link(&payer, &link_id, &amount);
+    let payment_id = client.use_link(&payer, &link_id, &amount, &None);
     assert!(!payment_id.is_empty());
 
     let link = client.get_link(&link_id);
@@ -82,9 +85,10 @@ fn test_use_link_wrong_amount() {
         &String::from_str(&env, "Fixed"),
         &None,
         &None,
+        &false,
     );
 
-    client.use_link(&payer, &link_id, &500i128);
+    client.use_link(&payer, &link_id, &500i128, &None);
 }
 
 #[test]
@@ -103,9 +107,10 @@ fn test_use_link_open_amount() {
         &String::from_str(&env, "Open"),
         &None,
         &None,
+        &false,
     );
 
-    client.use_link(&payer, &link_id, &1500i128);
+    client.use_link(&payer, &link_id, &1500i128, &None);
     let link = client.get_link(&link_id);
     assert_eq!(link.use_count, 1);
 }
@@ -125,6 +130,7 @@ fn test_deactivate_link() {
         &String::from_str(&env, "Bye"),
         &None,
         &None,
+        &false,
     );
 
     client.deactivate_link(&merchant, &link_id);
@@ -150,10 +156,11 @@ fn test_link_expired() {
         &String::from_str(&env, "Old"),
         &Some(expiry),
         &None,
+        &false,
     );
 
     env.ledger().set_timestamp(expiry + 1);
-    client.use_link(&payer, &link_id, &100i128);
+    client.use_link(&payer, &link_id, &100i128, &None);
 }
 
 #[test]
@@ -173,9 +180,79 @@ fn test_max_uses() {
         &String::from_str(&env, "Limit"),
         &None,
         &Some(1),
+        &false,
     );
 
-    client.use_link(&payer, &link_id, &100i128);
+    client.use_link(&payer, &link_id, &100i128, &None);
     // Should fail on second use
-    client.use_link(&payer, &link_id, &100i128);
+    client.use_link(&payer, &link_id, &100i128, &None);
+}
+
+// ── Issue #111: Direct-to-Merchant Payment Flow ──────────────────────────────
+
+#[test]
+fn test_direct_transfer_link_transfers_to_merchant() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let usdc_token = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_admin_client = token::StellarAssetClient::new(&env, &usdc_token);
+
+    let (merchant, client) = setup_payment_link(&env);
+    let payer = Address::generate(&env);
+
+    // Fund payer
+    token_admin_client.mint(&payer, &5000i128);
+
+    let link_id = String::from_str(&env, "direct_link");
+    let amount = 1000i128;
+    client.create_link(
+        &merchant,
+        &link_id,
+        &Some(amount),
+        &Symbol::new(&env, "USDC"),
+        &String::from_str(&env, "Direct"),
+        &None,
+        &None,
+        &true, // direct_transfer = true
+    );
+
+    let link = client.get_link(&link_id);
+    assert!(link.direct_transfer);
+
+    let token_client = token::TokenClient::new(&env, &usdc_token);
+    let merchant_balance_before = token_client.balance(&merchant);
+
+    client.use_link(&payer, &link_id, &amount, &Some(usdc_token.clone()));
+
+    let merchant_balance_after = token_client.balance(&merchant);
+    assert_eq!(merchant_balance_after - merchant_balance_before, amount);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn test_direct_transfer_without_token_address_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (merchant, client) = setup_payment_link(&env);
+    let payer = Address::generate(&env);
+
+    let link_id = String::from_str(&env, "direct_no_token");
+    client.create_link(
+        &merchant,
+        &link_id,
+        &Some(500i128),
+        &Symbol::new(&env, "USDC"),
+        &String::from_str(&env, "Direct no token"),
+        &None,
+        &None,
+        &true,
+    );
+
+    // Should fail because usdc_token is None but direct_transfer is true
+    client.use_link(&payer, &link_id, &500i128, &None);
 }

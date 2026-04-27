@@ -159,6 +159,89 @@ Open an issue or submit a PR to help build Fluxapay.
 
 Please refer to our [Security Policy](SECURITY.md) for information on reporting vulnerabilities and our current audit status.
 
+## Refunds
+
+FluxaPay supports both full and partial refunds on confirmed USDC payments via the `RefundManager` contract.
+
+### How Refunds Work
+
+1. A merchant (or authorized requester) calls `create_refund` with the `payment_id`, the refund amount, and a reason.
+2. The refund is created in `Pending` status and added to the payment's refund list.
+3. A settlement operator calls `process_refund` to execute the on-chain USDC transfer back to the requester (minus a 1% processing fee).
+4. The refund status transitions to `Completed`.
+
+**Constraints:**
+- The sum of all non-rejected refunds for a payment cannot exceed the original payment amount (`RefundExceedsPayment` error #16).
+- Multiple partial refunds are supported — each is tracked independently in the `PaymentRefunds` list.
+- Only `Confirmed` payments can be refunded.
+- Rejected refunds do not count toward the total, allowing replacement refunds.
+
+### Creating a Refund (Soroban CLI)
+
+```bash
+stellar contract invoke \
+  --id <REFUND_MANAGER_CONTRACT_ID> \
+  --source <REQUESTER_SECRET_KEY> \
+  --network testnet \
+  -- create_refund \
+  --payment_id "payment_abc123" \
+  --refund_amount 500000000 \
+  --reason "Customer requested return" \
+  --requester <REQUESTER_ADDRESS>
+```
+
+### Processing a Refund (Soroban CLI — settlement operator)
+
+```bash
+stellar contract invoke \
+  --id <REFUND_MANAGER_CONTRACT_ID> \
+  --source <OPERATOR_SECRET_KEY> \
+  --network testnet \
+  -- process_refund \
+  --operator <OPERATOR_ADDRESS> \
+  --refund_id "refund_1"
+```
+
+### Partial Refund Example (Rust SDK)
+
+```rust
+// Register the payment first (done automatically when a payment is confirmed)
+client.register_payment(&payment_id, &merchant_id, &1_000_000_000i128, &usdc_symbol);
+
+// Issue three partial refunds totalling the full payment amount
+let r1 = client.create_refund(&payment_id, &300_000_000i128, &reason, &requester);
+let r2 = client.create_refund(&payment_id, &400_000_000i128, &reason, &requester);
+let r3 = client.create_refund(&payment_id, &300_000_000i128, &reason, &requester);
+
+// Process each refund (operator role required)
+client.process_refund(&operator, &r1);
+client.process_refund(&operator, &r2);
+client.process_refund(&operator, &r3);
+```
+
+### Querying Refunds
+
+```bash
+# Get a single refund by ID
+stellar contract invoke --id <CONTRACT_ID> --network testnet \
+  -- get_refund --refund_id "refund_1"
+
+# Get all refunds for a payment
+stellar contract invoke --id <CONTRACT_ID> --network testnet \
+  -- get_payment_refunds --payment_id "payment_abc123"
+```
+
+### Refund Webhooks
+
+FluxaPay emits the following on-chain events for refund lifecycle tracking:
+
+| Event | Trigger |
+|---|---|
+| `REFUND/CREATED` | A new refund request is submitted |
+| `REFUND/COMPLETED` | Refund is processed and USDC transferred |
+| `REFUND/REJECTED` | Operator rejects the refund request |
+| `REFUND/CANCELLED` | Requester or admin cancels a pending refund |
+
 ## Telegram link
 
 <https://t.me/+m23gN14007w0ZmQ0>

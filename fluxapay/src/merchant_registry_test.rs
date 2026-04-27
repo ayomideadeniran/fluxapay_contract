@@ -459,7 +459,7 @@ fn test_reinstate_merchant() {
 
     let reason = String::from_str(&env, "Fraudulent activity");
     client.suspend_merchant(&admin, &merchant_id, &reason);
-    
+
     // Check it's suspended
     let suspended = client.get_merchant(&merchant_id);
     assert!(!suspended.active);
@@ -497,4 +497,3 @@ fn test_suspend_merchant_unauthorized() {
 
     client.suspend_merchant(&attacker, &merchant_id, &String::from_str(&env, "Reason"));
 }
-

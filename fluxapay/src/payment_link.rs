@@ -1,4 +1,6 @@
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, token, Address, Env, MuxedAddress, String, Symbol,
+};
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -12,6 +14,9 @@ pub struct PaymentLink {
     pub max_uses: Option<u32>,
     pub use_count: u32,
     pub active: bool,
+    /// If true, funds are transferred directly to the merchant wallet on use_link,
+    /// bypassing the escrow/platform wallet (issue #111).
+    pub direct_transfer: bool,
 }
 
 #[contracttype]
@@ -39,6 +44,7 @@ impl PaymentLinkManager {
         description: String,
         expires_at: Option<u64>,
         max_uses: Option<u32>,
+        direct_transfer: bool,
     ) -> String {
         merchant.require_auth();
 
@@ -52,6 +58,7 @@ impl PaymentLinkManager {
             max_uses,
             use_count: 0,
             active: true,
+            direct_transfer,
         };
 
         env.storage()
@@ -72,6 +79,7 @@ impl PaymentLinkManager {
         payer: Address,
         link_id: String,
         amount: i128,
+        usdc_token: Option<Address>,
     ) -> Result<String, crate::Error> {
         payer.require_auth();
 
@@ -105,6 +113,15 @@ impl PaymentLinkManager {
         env.storage()
             .persistent()
             .set(&LinkDataKey::Link(link_id.clone()), &link);
+
+        // Issue #111: If direct_transfer is true, transfer funds directly to the merchant,
+        // bypassing the escrow/platform wallet.
+        if link.direct_transfer {
+            let token_address = usdc_token.ok_or(crate::Error::Unauthorized)?;
+            let token_client = token::TokenClient::new(&env, &token_address);
+            let merchant_muxed: MuxedAddress = (&link.merchant_id).into();
+            token_client.transfer(&payer, &merchant_muxed, &amount);
+        }
 
         // Generate a virtual payment ID for tracking
         let payment_id = crate::format_id(&env, "lnk_pay_", env.ledger().timestamp());
