@@ -347,6 +347,7 @@ fn test_unverified_merchant_cannot_create_payment() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 }
 
@@ -403,6 +404,7 @@ fn test_verified_merchant_can_create_payment() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);

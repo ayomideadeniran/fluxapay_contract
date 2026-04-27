@@ -55,6 +55,7 @@ fn test_create_dispute() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Verify payment
@@ -114,6 +115,7 @@ fn test_review_dispute() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -172,6 +174,7 @@ fn test_resolve_dispute_with_refund() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -240,6 +243,7 @@ fn test_reject_dispute() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -296,6 +300,7 @@ fn test_get_payment_disputes() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let transaction_hash = BytesN::<32>::random(&env);
@@ -357,6 +362,7 @@ fn test_dispute_invalid_amount() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Try to create dispute with invalid amount - should fail
@@ -399,6 +405,7 @@ fn test_resolve_dispute_with_only_operator_auth() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);

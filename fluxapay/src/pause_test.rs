@@ -58,6 +58,7 @@ fn test_create_payment_when_paused() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 }
 
@@ -84,6 +85,7 @@ fn test_verify_payment_when_paused() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Pause the contract
@@ -124,6 +126,7 @@ fn test_cancel_payment_when_paused() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Pause the contract
@@ -159,6 +162,7 @@ fn test_create_payment_after_unpause() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.status, PaymentStatus::Pending);

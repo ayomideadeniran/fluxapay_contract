@@ -92,6 +92,7 @@ proptest! {
                         &None::<String>,
             &None::<String>,
             &None::<Address>,
+        &None::<String>,
         );
 
         env.ledger().set_timestamp(expires_at + after_expiry);
@@ -138,6 +139,7 @@ proptest! {
                         &None::<String>,
             &None::<String>,
             &None::<Address>,
+        &None::<String>,
         );
 
         let status = client.verify_payment(

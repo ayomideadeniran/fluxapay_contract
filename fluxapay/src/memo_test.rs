@@ -39,6 +39,7 @@ fn test_create_payment_with_memo() {
         &memo,
             &memo_type,
     &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);
@@ -70,6 +71,7 @@ fn test_create_payment_without_memo() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);
@@ -103,6 +105,7 @@ fn test_create_payment_with_id_memo() {
         &memo,
             &memo_type,
     &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.memo, Some(String::from_str(&env, "123456789")));
@@ -135,6 +138,7 @@ fn test_create_payment_with_hash_memo() {
         &memo,
             &memo_type,
     &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(
@@ -170,6 +174,7 @@ fn test_memo_persists_after_verification() {
         &memo,
             &memo_type,
     &None::<Address>,
+    &None::<String>,
     );
 
     // Verify payment

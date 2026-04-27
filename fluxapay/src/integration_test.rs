@@ -77,6 +77,7 @@ fn test_happy_path_flow() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let tx_hash = BytesN::<32>::random(&env);
@@ -143,6 +144,7 @@ fn test_settlement_path() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -187,6 +189,7 @@ fn test_failure_and_expiration_path() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Jump forward in time

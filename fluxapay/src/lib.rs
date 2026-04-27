@@ -139,6 +139,7 @@ pub enum Error {
     AmountAboveMax = 22,
     InvalidExpiry = 23,
     InvalidSettlement = 24,
+    DuplicateIdempotencyKey = 24,
 }
 
 #[contracttype]
@@ -180,6 +181,7 @@ pub enum DataKey {
     AllowedToken(Address),
     MerchantAmountLimits(Address),
     GlobalAmountLimits,
+    IdempotencyKey(String),
 }
 
 const SHORT_LIVE_TTL: u32 = 120_960; // ~1 week at 5s/ledger
@@ -1198,9 +1200,30 @@ impl PaymentProcessor {
         memo: Option<String>,
         memo_type: Option<String>,
         token_address: Option<Address>,
+        /// Optional idempotency key. If provided, retrying with the same key and payment_id
+        /// returns the existing payment. Using the same key with a different payment_id
+        /// returns `DuplicateIdempotencyKey`.
+        client_token: Option<String>,
     ) -> Result<PaymentCharge, Error> {
         Self::require_not_paused(&env)?;
         merchant_id.require_auth();
+
+        // Idempotency check: if client_token was already used, return the existing payment
+        // (or error if it maps to a different payment_id).
+        if let Some(ref token) = client_token {
+            let key = DataKey::IdempotencyKey(token.clone());
+            if let Some(existing_id) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, String>(&key)
+            {
+                if existing_id == payment_id {
+                    return Self::get_payment_internal(&env, &payment_id);
+                } else {
+                    return Err(Error::DuplicateIdempotencyKey);
+                }
+            }
+        }
 
         // Verify that the merchant has the MERCHANT role (granted on verification)
         if !AccessControl::has_role(&env, &role_merchant(&env), &merchant_id) {
@@ -1314,6 +1337,13 @@ impl PaymentProcessor {
             ),
             (merchant_id, amount),
         );
+
+        // Persist idempotency key → payment_id mapping so retries are safe.
+        if let Some(token) = client_token {
+            let key = DataKey::IdempotencyKey(token);
+            env.storage().persistent().set(&key, &payment_id);
+            Self::bump_ttl(&env, &key, LONG_LIVE_TTL);
+        }
 
         Ok(payment)
     }

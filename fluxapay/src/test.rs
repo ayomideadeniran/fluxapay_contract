@@ -57,6 +57,7 @@ fn test_create_payment() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.payment_id, payment_id);
@@ -95,6 +96,7 @@ fn test_create_payment_rate_limit_enforced() {
                         &None::<String>,
             &None::<String>,
             &None::<Address>,
+        &None::<String>,
         );
     }
 
@@ -110,6 +112,7 @@ fn test_create_payment_rate_limit_enforced() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(overflow, Err(Ok(Error::RateLimitExceeded)));
@@ -138,6 +141,7 @@ fn test_verify_payment_success() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let payer_address = Address::generate(&env);
@@ -182,6 +186,7 @@ fn test_verify_payment_partially_paid() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -226,6 +231,7 @@ fn test_verify_payment_overpaid() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -270,6 +276,7 @@ fn test_verify_payment_within_tolerance() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -318,6 +325,7 @@ fn test_get_merchant_payments_index_and_pagination() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     client.create_payment(
         &payment_id_2,
@@ -330,6 +338,7 @@ fn test_get_merchant_payments_index_and_pagination() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     client.create_payment(
         &payment_id_3,
@@ -342,6 +351,7 @@ fn test_get_merchant_payments_index_and_pagination() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let all = client.get_merchant_payments(&merchant_id);
@@ -378,6 +388,7 @@ fn test_cancel_pending_success() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Set time to before expiry
@@ -412,6 +423,7 @@ fn test_cancel_fails_when_confirmed() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let oracle = Address::generate(&env);
@@ -451,6 +463,7 @@ fn test_expiry_logic() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     // Set time to past expiry
@@ -486,6 +499,7 @@ fn test_unauthorized_cancel() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     let random_addr = Address::generate(&env);
@@ -515,6 +529,7 @@ fn test_expire_payment_after_deadline() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     env.ledger().set_timestamp(expires_at + 1);
@@ -739,6 +754,7 @@ fn test_create_payment_requires_auth() {
                 &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 }
 
@@ -1230,6 +1246,7 @@ fn test_create_payment_with_explicit_expires_at() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.expires_at, expires_at);
 }
@@ -1256,6 +1273,7 @@ fn test_create_payment_with_duration_secs() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.expires_at, now + duration);
 }
@@ -1281,6 +1299,7 @@ fn test_create_payment_defaults_to_one_hour() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.expires_at, now + DEFAULT_PAYMENT_DURATION_SECS);
 }
@@ -1306,6 +1325,7 @@ fn test_create_payment_explicit_expires_at_overrides_duration() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.expires_at, explicit_ts);
 }
@@ -1332,6 +1352,7 @@ fn test_create_payment_past_expires_at_fails() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(result, Err(Ok(Error::InvalidExpiry)));
 }
@@ -1356,6 +1377,7 @@ fn test_create_payment_zero_duration_fails() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(result, Err(Ok(Error::InvalidExpiry)));
 }
@@ -1384,6 +1406,7 @@ fn test_global_min_limit_blocks_payment() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(result, Err(Ok(Error::AmountBelowMin)));
 }
@@ -1410,6 +1433,7 @@ fn test_global_max_limit_blocks_payment() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(result, Err(Ok(Error::AmountAboveMax)));
 }
@@ -1436,6 +1460,7 @@ fn test_global_limits_allow_payment_within_range() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.status, PaymentStatus::Pending);
 }
@@ -1467,6 +1492,7 @@ fn test_merchant_limits_override_global_limits() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(payment.status, PaymentStatus::Pending);
 }
@@ -1493,6 +1519,7 @@ fn test_merchant_max_limit_blocks_payment() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
     assert_eq!(result, Err(Ok(Error::AmountAboveMax)));
 }
@@ -1571,6 +1598,7 @@ fn test_create_payment_with_allowed_token() {
         &None::<String>,
         &None::<String>,
         &Some(alt_token.clone()),
+    &None::<String>,
     );
 
     assert_eq!(payment.token_address, Some(alt_token));
@@ -1603,6 +1631,7 @@ fn test_create_payment_with_unlisted_token_fails() {
         &None::<String>,
         &None::<String>,
         &Some(unknown_token),
+    &None::<String>,
     );
 
     assert_eq!(result, Err(Ok(Error::UnsupportedToken)));
@@ -1628,6 +1657,7 @@ fn test_create_payment_no_token_address_uses_default() {
         &None::<String>,
         &None::<String>,
         &None::<Address>,
+    &None::<String>,
     );
 
     assert_eq!(payment.token_address, None);
@@ -1666,6 +1696,7 @@ fn test_verify_payment_decimal_aware_tolerance_7_decimals() {
         &None::<String>,
         &None::<String>,
         &Some(alt_token),
+    &None::<String>,
     );
 
     // Underpay by 10 (within 7-decimal tolerance of 10) → Confirmed
@@ -1710,6 +1741,7 @@ fn test_verify_payment_decimal_aware_tolerance_7_decimals_overpay() {
         &None::<String>,
         &None::<String>,
         &Some(alt_token),
+    &None::<String>,
     );
 
     // Underpay by 11 → PartiallyPaid
@@ -1875,6 +1907,10 @@ fn make_confirmed_payment(
 
 #[test]
 fn test_settle_payment_single_split() {
+// --- Idempotency key (client_token) tests ---
+
+#[test]
+fn test_create_payment_idempotency_retry_returns_same_payment() {
     let env = Env::default();
     env.mock_all_auths();
     let (admin, client) = setup_payment_processor(&env);
@@ -1895,6 +1931,48 @@ fn test_settle_payment_single_split() {
 
 #[test]
 fn test_settle_payment_multi_split() {
+    let merchant_id = Address::generate(&env);
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
+
+    let payment_id = String::from_str(&env, "idem_pay_1");
+    let client_token = Some(String::from_str(&env, "tok_abc123"));
+    let expires_at = env.ledger().timestamp() + 3600;
+
+    let first = client.create_payment(
+        &payment_id,
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &client_token,
+    );
+
+    // Retry with same client_token and payment_id — must return the same payment
+    let retry = client.create_payment(
+        &payment_id,
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &client_token,
+    );
+
+    assert_eq!(first.payment_id, retry.payment_id);
+    assert_eq!(first.created_at, retry.created_at);
+}
+
+#[test]
+fn test_create_payment_idempotency_different_payment_id_fails() {
     let env = Env::default();
     env.mock_all_auths();
     let (admin, client) = setup_payment_processor(&env);
@@ -1941,6 +2019,47 @@ fn test_settle_payment_split_total_mismatch_fails() {
 
 #[test]
 fn test_settle_payment_empty_splits_fails() {
+    let merchant_id = Address::generate(&env);
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
+
+    let client_token = Some(String::from_str(&env, "tok_conflict"));
+    let expires_at = env.ledger().timestamp() + 3600;
+
+    // First call succeeds
+    client.create_payment(
+        &String::from_str(&env, "idem_pay_a"),
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &client_token,
+    );
+
+    // Second call with same token but different payment_id must fail
+    let result = client.try_create_payment(
+        &String::from_str(&env, "idem_pay_b"),
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &client_token,
+    );
+
+    assert_eq!(result, Err(Ok(Error::DuplicateIdempotencyKey)));
+}
+
+#[test]
+fn test_create_payment_without_client_token_allows_duplicate_id_error() {
     let env = Env::default();
     env.mock_all_auths();
     let (admin, client) = setup_payment_processor(&env);
@@ -1977,4 +2096,40 @@ fn test_settle_payment_zero_amount_split_fails() {
     ];
     let result = client.try_settle_payment(&operator, &payment_id, &splits);
     assert_eq!(result, Err(Ok(Error::InvalidSettlement)));
+    let merchant_id = Address::generate(&env);
+    client.grant_role(&admin, &role_merchant(&env), &merchant_id);
+
+    let payment_id = String::from_str(&env, "idem_pay_no_tok");
+    let expires_at = env.ledger().timestamp() + 3600;
+
+    client.create_payment(
+        &payment_id,
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &None::<String>,
+    );
+
+    // Without a client_token, a second call with the same payment_id returns PaymentAlreadyExists
+    let result = client.try_create_payment(
+        &payment_id,
+        &merchant_id,
+        &1000i128,
+        &Symbol::new(&env, "USDC"),
+        &Address::generate(&env),
+        &Some(expires_at),
+        &None::<u64>,
+        &None::<String>,
+        &None::<String>,
+        &None::<Address>,
+        &None::<String>,
+    );
+
+    assert_eq!(result, Err(Ok(Error::PaymentAlreadyExists)));
 }
