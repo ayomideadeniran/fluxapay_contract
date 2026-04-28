@@ -139,7 +139,39 @@ pub enum Error {
     AmountAboveMax = 22,
     InvalidExpiry = 23,
     InvalidSettlement = 24,
-    DuplicateIdempotencyKey = 24,
+    DuplicateIdempotencyKey = 25,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CreatePaymentArgs {
+    pub payment_id: String,
+    pub merchant_id: Address,
+    pub amount: i128,
+    pub currency: Symbol,
+    pub deposit_address: Address,
+    pub expires_at: Option<u64>,
+    pub duration_secs: Option<u64>,
+    pub memo: Option<String>,
+    pub memo_type: Option<String>,
+    pub token_address: Option<Address>,
+    pub client_token: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseState {
+    pub paused: bool,
+    pub reason: String,
+    pub admin: Option<Address>,
+    pub timestamp: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseInfo {
+    pub global: PauseState,
+    pub creation: PauseState,
 }
 
 #[contracttype]
@@ -177,6 +209,7 @@ pub enum DataKey {
     DisputeCounter,
     UsdcToken,
     Paused,
+    CreationPaused,
     MerchantRegistryAddress,
     AllowedToken(Address),
     MerchantAmountLimits(Address),
@@ -969,8 +1002,17 @@ impl PaymentProcessor {
 
     pub fn initialize_payment_processor(env: Env, admin: Address) {
         AccessControl::initialize(&env, admin);
-        // Initialize paused state to false
-        env.storage().persistent().set(&DataKey::Paused, &false);
+        
+        let empty_reason = String::from_str(&env, "");
+        let initial_state = PauseState {
+            paused: false,
+            reason: empty_reason,
+            admin: None,
+            timestamp: env.ledger().timestamp(),
+        };
+        
+        env.storage().persistent().set(&DataKey::Paused, &initial_state);
+        env.storage().persistent().set(&DataKey::CreationPaused, &initial_state);
     }
 
     pub fn set_merchant_registry_address(
@@ -1000,45 +1042,126 @@ impl PaymentProcessor {
         AccessControl::grant_role(&env, admin, role, account).map_err(|_| Error::AccessControlError)
     }
 
-    /// Set the paused state (admin only). When paused, create_payment, verify_payment, and cancel_payment are blocked.
-    pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+    /// Set the global paused state (admin only). When paused, create_payment, verify_payment, and cancel_payment are blocked.
+    pub fn set_global_pause(env: Env, admin: Address, paused: bool, reason: String) -> Result<(), Error> {
         admin.require_auth();
 
         if !AccessControl::has_role(&env, &role_admin(&env), &admin) {
             return Err(Error::Unauthorized);
         }
 
-        env.storage().persistent().set(&DataKey::Paused, &paused);
+        let state = PauseState {
+            paused,
+            reason: reason.clone(),
+            admin: Some(admin.clone()),
+            timestamp: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&DataKey::Paused, &state);
 
         let event_name = if paused {
-            Symbol::new(&env, "PAUSED")
+            Symbol::new(&env, "GLOBAL_PAUSED")
         } else {
-            Symbol::new(&env, "UNPAUSED")
+            Symbol::new(&env, "GLOBAL_UNPAUSED")
         };
 
         env.events()
-            .publish((Symbol::new(&env, "CONTRACT"), event_name), admin);
+            .publish((Symbol::new(&env, "CONTRACT"), event_name), (admin, reason));
 
         Ok(())
     }
 
-    /// Get the current paused state.
+    /// Set the creation paused state (admin only). When paused, only create_payment is blocked.
+    pub fn set_creation_pause(env: Env, admin: Address, paused: bool, reason: String) -> Result<(), Error> {
+        admin.require_auth();
+
+        if !AccessControl::has_role(&env, &role_admin(&env), &admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        let state = PauseState {
+            paused,
+            reason: reason.clone(),
+            admin: Some(admin.clone()),
+            timestamp: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&DataKey::CreationPaused, &state);
+
+        let event_name = if paused {
+            Symbol::new(&env, "CREATION_PAUSED")
+        } else {
+            Symbol::new(&env, "CREATION_UNPAUSED")
+        };
+
+        env.events()
+            .publish((Symbol::new(&env, "CONTRACT"), event_name), (admin, reason));
+
+        Ok(())
+    }
+
+    /// Legacy wrapper for set_global_pause
+    pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        let reason = if paused {
+            String::from_str(&env, "Legacy pause")
+        } else {
+            String::from_str(&env, "Legacy unpause")
+        };
+        Self::set_global_pause(env, admin, paused, reason)
+    }
+
+    /// Get the current consolidated pause info.
+    pub fn get_pause_info(env: Env) -> PauseInfo {
+        let empty_reason = String::from_str(&env, "");
+        let default_state = PauseState {
+            paused: false,
+            reason: empty_reason,
+            admin: None,
+            timestamp: 0,
+        };
+
+        let global = env.storage()
+            .persistent()
+            .get::<DataKey, PauseState>(&DataKey::Paused)
+            .unwrap_or_else(|| default_state.clone());
+            
+        let creation = env.storage()
+            .persistent()
+            .get::<DataKey, PauseState>(&DataKey::CreationPaused)
+            .unwrap_or(default_state);
+
+        PauseInfo { global, creation }
+    }
+
+    /// Get the current global paused state.
     pub fn is_paused(env: Env) -> bool {
         env.storage()
             .persistent()
-            .get(&DataKey::Paused)
+            .get::<DataKey, PauseState>(&DataKey::Paused)
+            .map(|s| s.paused)
             .unwrap_or(false)
     }
 
-    /// Check if contract is paused and return error if so.
+    /// Check if contract is globally paused and return error if so.
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        let paused: bool = env
+        if Self::is_paused(env.clone()) {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    /// Check if payment creation is paused (either globally or specifically for creation).
+    fn require_creation_not_paused(env: &Env) -> Result<(), Error> {
+        Self::require_not_paused(env)?;
+        
+        let creation_paused: bool = env
             .storage()
             .persistent()
-            .get(&DataKey::Paused)
+            .get::<DataKey, PauseState>(&DataKey::CreationPaused)
+            .map(|s| s.paused)
             .unwrap_or(false);
 
-        if paused {
+        if creation_paused {
             return Err(Error::ContractPaused);
         }
         Ok(())
@@ -1184,41 +1307,24 @@ impl PaymentProcessor {
     }
 
     #[allow(deprecated)]
-    #[allow(clippy::too_many_arguments)]
     pub fn create_payment(
         env: Env,
-        payment_id: String,
-        merchant_id: Address,
-        amount: i128,
-        currency: Symbol,
-        deposit_address: Address,
-        /// Absolute expiry timestamp (Unix seconds). When `None`, `duration_secs` is used.
-        expires_at: Option<u64>,
-        /// Seconds from now until the payment expires. Ignored when `expires_at` is `Some`.
-        /// Defaults to `DEFAULT_PAYMENT_DURATION_SECS` (1 hour) when both are `None`.
-        duration_secs: Option<u64>,
-        memo: Option<String>,
-        memo_type: Option<String>,
-        token_address: Option<Address>,
-        /// Optional idempotency key. If provided, retrying with the same key and payment_id
-        /// returns the existing payment. Using the same key with a different payment_id
-        /// returns `DuplicateIdempotencyKey`.
-        client_token: Option<String>,
+        args: CreatePaymentArgs,
     ) -> Result<PaymentCharge, Error> {
-        Self::require_not_paused(&env)?;
-        merchant_id.require_auth();
+        Self::require_creation_not_paused(&env)?;
+        args.merchant_id.require_auth();
 
         // Idempotency check: if client_token was already used, return the existing payment
         // (or error if it maps to a different payment_id).
-        if let Some(ref token) = client_token {
+        if let Some(ref token) = args.client_token {
             let key = DataKey::IdempotencyKey(token.clone());
             if let Some(existing_id) = env
                 .storage()
                 .persistent()
                 .get::<DataKey, String>(&key)
             {
-                if existing_id == payment_id {
-                    return Self::get_payment_internal(&env, &payment_id);
+                if existing_id == args.payment_id {
+                    return Self::get_payment_internal(&env, &args.payment_id);
                 } else {
                     return Err(Error::DuplicateIdempotencyKey);
                 }
@@ -1226,12 +1332,12 @@ impl PaymentProcessor {
         }
 
         // Verify that the merchant has the MERCHANT role (granted on verification)
-        if !AccessControl::has_role(&env, &role_merchant(&env), &merchant_id) {
+        if !AccessControl::has_role(&env, &role_merchant(&env), &args.merchant_id) {
             return Err(Error::Unauthorized);
         }
 
         // Validate token: if provided it must be on the allowlist; if absent the default USDC token is used.
-        if let Some(ref token_addr) = token_address {
+        if let Some(ref token_addr) = args.token_address {
             let allowed: bool = env
                 .storage()
                 .persistent()
@@ -1250,7 +1356,7 @@ impl PaymentProcessor {
         {
             let registry_client =
                 crate::merchant_registry::MerchantRegistryClient::new(&env, &registry_address);
-            match registry_client.try_get_merchant(&merchant_id) {
+            match registry_client.try_get_merchant(&args.merchant_id) {
                 Ok(Ok(merchant)) => {
                     // Require merchant to be verified (not Unverified), active, and not suspended
                     if merchant.kyc_tier == crate::merchant_registry::KycTier::Unverified
@@ -1267,31 +1373,31 @@ impl PaymentProcessor {
             }
         }
 
-        if amount <= 0 {
+        if args.amount <= 0 {
             return Err(Error::InvalidAmount);
         }
 
-        Self::enforce_amount_limits(&env, &merchant_id, amount)?;
+        Self::enforce_amount_limits(&env, &args.merchant_id, args.amount)?;
 
         if env
             .storage()
             .persistent()
-            .has(&DataKey::Payment(payment_id.clone()))
+            .has(&DataKey::Payment(args.payment_id.clone()))
         {
             return Err(Error::PaymentAlreadyExists);
         }
 
-        if payment_id.is_empty() {
+        if args.payment_id.is_empty() {
             return Err(Error::InvalidPaymentId);
         }
 
-        Self::enforce_create_payment_rate_limit(&env, &merchant_id)?;
+        Self::enforce_create_payment_rate_limit(&env, &args.merchant_id)?;
 
         let now = env.ledger().timestamp();
-        let resolved_expires_at = match expires_at {
+        let resolved_expires_at = match args.expires_at {
             Some(ts) => ts,
             None => now.saturating_add(
-                duration_secs.unwrap_or(DEFAULT_PAYMENT_DURATION_SECS),
+                args.duration_secs.unwrap_or(DEFAULT_PAYMENT_DURATION_SECS),
             ),
         };
         if resolved_expires_at <= now {
@@ -1299,11 +1405,11 @@ impl PaymentProcessor {
         }
 
         let payment = PaymentCharge {
-            payment_id: payment_id.clone(),
-            merchant_id: merchant_id.clone(),
-            amount,
-            currency,
-            deposit_address,
+            payment_id: args.payment_id.clone(),
+            merchant_id: args.merchant_id.clone(),
+            amount: args.amount,
+            currency: args.currency,
+            deposit_address: args.deposit_address,
             status: PaymentStatus::Pending,
             payer_address: None,
             transaction_hash: None,
@@ -1311,19 +1417,19 @@ impl PaymentProcessor {
             confirmed_at: None,
             expires_at: resolved_expires_at,
             amount_received: None,
-            memo: memo.clone(),
-            memo_type: memo_type.clone(),
-            token_address: token_address.clone(),
+            memo: args.memo.clone(),
+            memo_type: args.memo_type.clone(),
+            token_address: args.token_address.clone(),
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Payment(payment_id.clone()), &payment);
-        Self::bump_payment_ttl(&env, &payment_id, &payment.status);
+            .set(&DataKey::Payment(args.payment_id.clone()), &payment);
+        Self::bump_payment_ttl(&env, &args.payment_id, &payment.status);
 
-        let mut merchant_payments = Self::get_merchant_payments_internal(&env, &merchant_id);
-        merchant_payments.push_back(payment_id.clone());
-        let merchant_payments_key = DataKey::MerchantPayments(merchant_id.clone());
+        let mut merchant_payments = Self::get_merchant_payments_internal(&env, &args.merchant_id);
+        merchant_payments.push_back(args.payment_id.clone());
+        let merchant_payments_key = DataKey::MerchantPayments(args.merchant_id.clone());
         env.storage()
             .persistent()
             .set(&merchant_payments_key, &merchant_payments);
@@ -1333,15 +1439,15 @@ impl PaymentProcessor {
             (
                 Symbol::new(&env, "PAYMENT"),
                 Symbol::new(&env, "CREATED"),
-                payment_id.clone(),
+                args.payment_id.clone(),
             ),
-            (merchant_id, amount),
+            (args.merchant_id, args.amount),
         );
 
         // Persist idempotency key → payment_id mapping so retries are safe.
-        if let Some(token) = client_token {
+        if let Some(token) = args.client_token {
             let key = DataKey::IdempotencyKey(token);
-            env.storage().persistent().set(&key, &payment_id);
+            env.storage().persistent().set(&key, &args.payment_id);
             Self::bump_ttl(&env, &key, LONG_LIVE_TTL);
         }
 
