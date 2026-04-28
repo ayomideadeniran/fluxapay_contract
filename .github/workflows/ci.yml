@@ -349,8 +349,7 @@ jobs:
   ci-success:
     name: CI Success
     if: ${{ always() }}
-    needs: [format, lint, build, test, coverage, sdk-check]
-    needs: [format, lint, security-audit, build, test, coverage]
+    needs: [format, lint, security-audit, build, test, coverage, sdk-check]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
