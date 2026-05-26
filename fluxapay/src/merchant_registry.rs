@@ -467,10 +467,14 @@ impl MerchantRegistry {
 
     /// Calculate the platform fee for a given amount based on merchant's FeeConfig.
     /// Returns (platform_fee, net_amount).
-    pub fn calculate_fee(env: Env, merchant_id: Address, amount: i128) -> Result<(i128, i128), MerchantError> {
+    pub fn calculate_fee(
+        env: Env,
+        merchant_id: Address,
+        amount: i128,
+    ) -> Result<(i128, i128), MerchantError> {
         let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
 
-        if let Some(ref config) = merchant.fee_config.as_option() {
+        if let Some(config) = merchant.fee_config.as_option() {
             if config.platform_fee_bps == 0 && config.fixed_fee == 0 {
                 return Ok((0, amount));
             }
@@ -498,20 +502,20 @@ impl MerchantRegistry {
     /// Returns the custom fee recipient if set, otherwise the admin address.
     pub fn get_fee_recipient(env: Env, merchant_id: Address) -> Result<Address, MerchantError> {
         let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
-        
+
         if let MaybeFeeConfig::Some(config) = merchant.fee_config {
             if let Some(recipient) = &config.fee_recipient {
                 return Ok(recipient.clone());
             }
         }
-        
+
         // Default to admin if no custom recipient
         let admin: Address = env
             .storage()
             .persistent()
             .get(&MerchantDataKey::Admin)
             .ok_or(MerchantError::Unauthorized)?;
-        
+
         Ok(admin)
     }
 

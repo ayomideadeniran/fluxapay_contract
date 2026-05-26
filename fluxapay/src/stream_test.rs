@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::stream::{PaymentStreaming, PaymentStreamingClient, StreamError, StreamStatus};
+use crate::utils::format_id;
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
     token, Address, Env, String,
@@ -83,8 +84,7 @@ fn test_create_stream_duplicate_id() {
 
     client.create_stream(&sender, &receiver, &token, &10i128, &500i128, &stream_id);
 
-    let err =
-        client.try_create_stream(&sender, &receiver, &token, &10i128, &500i128, &stream_id);
+    let err = client.try_create_stream(&sender, &receiver, &token, &10i128, &500i128, &stream_id);
     assert_eq!(err, Err(Ok(StreamError::StreamAlreadyExists)));
 }
 
@@ -242,10 +242,10 @@ fn test_set_stream_destination_and_trigger_withdrawal() {
     let destination = Address::generate(&env);
 
     client.create_stream(&sender, &receiver, &token, &10i128, &500i128, &stream_id);
-    client.set_stream_destination(&receiver, &stream_id, &destination).unwrap();
+    client.set_stream_destination(&receiver, &stream_id, &destination);
 
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
-    let processed = client.trigger_withdrawal(&stream_id).unwrap();
+    let processed = client.trigger_withdrawal(&stream_id);
 
     assert_eq!(processed, stream_id);
     assert_eq!(token_client.balance(&destination), 100i128);
@@ -272,11 +272,11 @@ fn test_withdraw_all_for_recipient_limits_execution() {
 
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
 
-    let processed = client.withdraw_all_for_recipient(&receiver, &2u32).unwrap();
+    let processed = client.withdraw_all_for_recipient(&receiver, &2u32);
     assert_eq!(processed.len(), 2);
     assert_eq!(token_client.balance(&receiver), 100 + 200);
 
-    let next = client.withdraw_all_for_recipient(&receiver, &2u32).unwrap();
+    let next = client.withdraw_all_for_recipient(&receiver, &2u32);
     assert_eq!(next.len(), 1);
     assert_eq!(token_client.balance(&receiver), 100 + 200 + 300);
 }
@@ -288,7 +288,7 @@ fn test_get_sender_streams_pagination() {
     let (client, sender, receiver, token) = setup(&env);
 
     for i in 0..5 {
-        let stream_id = String::from_str(&env, &format!("sender_page_{}", i));
+        let stream_id = format_id(&env, "sender_page_", i as u64);
         client.create_stream(&sender, &receiver, &token, &10i128, &500i128, &stream_id);
     }
 

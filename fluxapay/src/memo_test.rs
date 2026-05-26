@@ -1,5 +1,6 @@
 use crate::{
-    access_control::role_merchant, CreatePaymentArgs, PaymentProcessor, PaymentProcessorClient, PaymentStatus,
+    access_control::role_merchant, CreatePaymentArgs, PaymentProcessor, PaymentProcessorClient,
+    PaymentStatus,
 };
 use soroban_sdk::{
     testutils::Address as _, testutils::BytesN as _, Address, BytesN, Env, String, Symbol,

@@ -13,19 +13,20 @@ const CREATE_PAYMENT_WINDOW_SECS: u64 = 60;
 const CREATE_PAYMENT_MAX_PER_WINDOW: u32 = 30;
 pub const DEFAULT_PAYMENT_DURATION_SECS: u64 = 3_600;
 const REFUND_FEE_BPS: i128 = 100;
-const DEFAULT_DEX_ROUTER: &[u8] = b"DEX_ROUTER_ADDRESS";
+pub(crate) const ZERO_CONTRACT_STRKEY: &str =
+    "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM";
 
 mod access_control;
-pub mod fx_oracle;
 mod dex_router;
+pub mod fx_oracle;
 use access_control::{
     role_admin, role_merchant, role_oracle, role_settlement_operator, AccessControl,
 };
 // Re-export for tests
 #[allow(unused_imports)]
 pub use access_control::AccessControlDataKey;
-pub use fx_oracle::{FXOracle, FXOracleClient, FXOracleError};
 pub use dex_router::{DexRouter, DexRouterClient};
+pub use fx_oracle::{FXOracle, FXOracleClient, FXOracleError};
 
 #[contract]
 pub struct PaymentProcessor;
@@ -70,7 +71,6 @@ pub enum PaymentStatus {
     /// Customer sent more than the required amount (e.g. tip or rounding).
     Overpaid,
 }
-
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,6 +148,10 @@ pub enum Error {
     InvalidSettlement = 24,
     DuplicateIdempotencyKey = 25,
     InvalidAddress = 26,
+    /// Swap path contains a circular route indicative of arbitrage exploitation.
+    ArbitrageDetected = 27,
+    /// DEX path or quoted returns failed validation.
+    SwapPathInvalid = 28,
 }
 
 #[contracttype]
@@ -237,8 +241,6 @@ pub struct PaymentConfig {
     pub client_token: Option<String>,
 }
 
-
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SubscriptionStatus {
@@ -314,7 +316,6 @@ pub enum DataKey {
     StreamCounter,
 }
 
-
 #[contractimpl]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl RefundManager {
@@ -323,17 +324,18 @@ impl RefundManager {
     }
 
     fn validate_init_address(env: &Env, address: Address) -> Result<(), Error> {
-        let zero_address = Address::from_contract_id(
-            &env,
-            &BytesN::from_array(&env, &[0u8; 32]),
-        );
+        let zero_address = Address::from_str(env, ZERO_CONTRACT_STRKEY);
         if address == zero_address {
             return Err(Error::InvalidAddress);
         }
         Ok(())
     }
 
-    fn validate_admin_and_token(env: &Env, admin: Address, token_address: Address) -> Result<(), Error> {
+    fn validate_admin_and_token(
+        env: &Env,
+        admin: Address,
+        token_address: Address,
+    ) -> Result<(), Error> {
         if admin == token_address {
             return Err(Error::InvalidAddress);
         }
@@ -852,10 +854,7 @@ impl RefundManager {
 
         // Issue #27: emit DISPUTE_REVIEWED event
         env.events().publish(
-            (
-                Symbol::new(&env, "DISPUTE"),
-                Symbol::new(&env, "REVIEWED"),
-            ),
+            (Symbol::new(&env, "DISPUTE"), Symbol::new(&env, "REVIEWED")),
             (dispute_id, dispute.payment_id),
         );
 
@@ -1177,12 +1176,12 @@ impl RefundManager {
             max_payments,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Subscription(subscription_id.clone()), &subscription);
+        env.storage().persistent().set(
+            &DataKey::Subscription(subscription_id.clone()),
+            &subscription,
+        );
 
-        let mut payer_subscriptions =
-            Self::get_payer_subscriptions_internal(&env, &payer);
+        let mut payer_subscriptions = Self::get_payer_subscriptions_internal(&env, &payer);
         payer_subscriptions.push_back(subscription_id.clone());
         env.storage().persistent().set(
             &DataKey::PayerSubscriptions(payer.clone()),
@@ -1190,17 +1189,17 @@ impl RefundManager {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "SUBSCRIPTION"), Symbol::new(&env, "CREATED")),
+            (
+                Symbol::new(&env, "SUBSCRIPTION"),
+                Symbol::new(&env, "CREATED"),
+            ),
             (subscription_id.clone(), payer, plan_id),
         );
 
         Ok(subscription_id)
     }
 
-    pub fn get_subscription(
-        env: Env,
-        subscription_id: String,
-    ) -> Result<Subscription, Error> {
+    pub fn get_subscription(env: Env, subscription_id: String) -> Result<Subscription, Error> {
         Self::get_subscription_internal(&env, &subscription_id)
     }
 
@@ -1222,8 +1221,7 @@ impl RefundManager {
     ) -> Result<(), Error> {
         payer.require_auth();
 
-        let mut subscription =
-            Self::get_subscription_internal(&env, &subscription_id)?;
+        let mut subscription = Self::get_subscription_internal(&env, &subscription_id)?;
 
         if subscription.payer_address != payer {
             return Err(Error::Unauthorized);
@@ -1248,8 +1246,7 @@ impl RefundManager {
     ) -> Result<(), Error> {
         payer.require_auth();
 
-        let mut subscription =
-            Self::get_subscription_internal(&env, &subscription_id)?;
+        let mut subscription = Self::get_subscription_internal(&env, &subscription_id)?;
 
         if subscription.payer_address != payer {
             return Err(Error::Unauthorized);
@@ -1260,7 +1257,10 @@ impl RefundManager {
         }
 
         subscription.status = SubscriptionStatus::Active;
-        subscription.next_payment_at = env.ledger().timestamp().saturating_add(subscription.interval_secs);
+        subscription.next_payment_at = env
+            .ledger()
+            .timestamp()
+            .saturating_add(subscription.interval_secs);
         env.storage()
             .persistent()
             .set(&DataKey::Subscription(subscription_id), &subscription);
@@ -1275,8 +1275,7 @@ impl RefundManager {
     ) -> Result<(), Error> {
         payer.require_auth();
 
-        let mut subscription =
-            Self::get_subscription_internal(&env, &subscription_id)?;
+        let mut subscription = Self::get_subscription_internal(&env, &subscription_id)?;
 
         if subscription.payer_address != payer {
             return Err(Error::Unauthorized);
@@ -1300,8 +1299,7 @@ impl RefundManager {
             return Err(Error::Unauthorized);
         }
 
-        let now = env.ledger().timestamp();
-        let mut processed_count = 0u32;
+        let processed_count = 0u32;
 
         // Note: In a real implementation, you'd want to iterate through subscriptions
         // more efficiently. This is a simplified version.
@@ -1395,10 +1393,7 @@ impl PaymentProcessor {
     }
 
     fn validate_init_admin(env: &Env, admin: Address) -> Result<(), Error> {
-        let zero_address = Address::from_contract_id(
-            &env,
-            &BytesN::from_array(&env, &[0u8; 32]),
-        );
+        let zero_address = Address::from_str(env, ZERO_CONTRACT_STRKEY);
         if admin == zero_address {
             return Err(Error::InvalidAddress);
         }
@@ -1408,7 +1403,7 @@ impl PaymentProcessor {
     pub fn initialize_payment_processor(env: Env, admin: Address) -> Result<(), Error> {
         Self::validate_init_admin(&env, admin.clone())?;
         AccessControl::initialize(&env, admin);
-        
+
         let empty_reason = String::from_str(&env, "");
         let initial_state = PauseState {
             paused: false,
@@ -1416,9 +1411,13 @@ impl PaymentProcessor {
             admin: None,
             timestamp: env.ledger().timestamp(),
         };
-        
-        env.storage().persistent().set(&DataKey::Paused, &initial_state);
-        env.storage().persistent().set(&DataKey::CreationPaused, &initial_state);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Paused, &initial_state);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CreationPaused, &initial_state);
         Ok(())
     }
 
@@ -1450,7 +1449,12 @@ impl PaymentProcessor {
     }
 
     /// Set the global paused state (admin only). When paused, create_payment, verify_payment, and cancel_payment are blocked.
-    pub fn set_global_pause(env: Env, admin: Address, paused: bool, reason: String) -> Result<(), Error> {
+    pub fn set_global_pause(
+        env: Env,
+        admin: Address,
+        paused: bool,
+        reason: String,
+    ) -> Result<(), Error> {
         admin.require_auth();
 
         if !AccessControl::has_role(&env, &role_admin(&env), &admin) {
@@ -1479,7 +1483,12 @@ impl PaymentProcessor {
     }
 
     /// Set the creation paused state (admin only). When paused, only create_payment is blocked.
-    pub fn set_creation_pause(env: Env, admin: Address, paused: bool, reason: String) -> Result<(), Error> {
+    pub fn set_creation_pause(
+        env: Env,
+        admin: Address,
+        paused: bool,
+        reason: String,
+    ) -> Result<(), Error> {
         admin.require_auth();
 
         if !AccessControl::has_role(&env, &role_admin(&env), &admin) {
@@ -1493,7 +1502,9 @@ impl PaymentProcessor {
             timestamp: env.ledger().timestamp(),
         };
 
-        env.storage().persistent().set(&DataKey::CreationPaused, &state);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CreationPaused, &state);
 
         let event_name = if paused {
             Symbol::new(&env, "CREATION_PAUSED")
@@ -1527,12 +1538,14 @@ impl PaymentProcessor {
             timestamp: 0,
         };
 
-        let global = env.storage()
+        let global = env
+            .storage()
             .persistent()
             .get::<DataKey, PauseState>(&DataKey::Paused)
             .unwrap_or_else(|| default_state.clone());
-            
-        let creation = env.storage()
+
+        let creation = env
+            .storage()
             .persistent()
             .get::<DataKey, PauseState>(&DataKey::CreationPaused)
             .unwrap_or(default_state);
@@ -1560,7 +1573,7 @@ impl PaymentProcessor {
     /// Check if payment creation is paused (either globally or specifically for creation).
     fn require_creation_not_paused(env: &Env) -> Result<(), Error> {
         Self::require_not_paused(env)?;
-        
+
         let creation_paused: bool = env
             .storage()
             .persistent()
@@ -1661,9 +1674,7 @@ impl PaymentProcessor {
 
     /// Read global amount limits.
     pub fn get_global_amount_limits(env: Env) -> Option<AmountLimits> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::GlobalAmountLimits)
+        env.storage().persistent().get(&DataKey::GlobalAmountLimits)
     }
 
     /// Enforce amount limits: merchant-specific limits take precedence over global limits.
@@ -1672,11 +1683,7 @@ impl PaymentProcessor {
             .storage()
             .persistent()
             .get(&DataKey::MerchantAmountLimits(merchant_id.clone()))
-            .or_else(|| {
-                env.storage()
-                    .persistent()
-                    .get(&DataKey::GlobalAmountLimits)
-            });
+            .or_else(|| env.storage().persistent().get(&DataKey::GlobalAmountLimits));
 
         if let Some(l) = limits {
             if let Some(min) = l.min {
@@ -1714,10 +1721,7 @@ impl PaymentProcessor {
     }
 
     #[allow(deprecated)]
-    pub fn create_payment(
-        env: Env,
-        args: CreatePaymentArgs,
-    ) -> Result<PaymentCharge, Error> {
+    pub fn create_payment(env: Env, args: CreatePaymentArgs) -> Result<PaymentCharge, Error> {
         Self::require_creation_not_paused(&env)?;
         args.merchant_id.require_auth();
 
@@ -1725,11 +1729,7 @@ impl PaymentProcessor {
         // (or error if it maps to a different payment_id).
         if let Some(ref token) = args.client_token {
             let key = DataKey::IdempotencyKey(token.clone());
-            if let Some(existing_id) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, String>(&key)
-            {
+            if let Some(existing_id) = env.storage().persistent().get::<DataKey, String>(&key) {
                 if existing_id == args.payment_id {
                     return Self::get_payment_internal(&env, &args.payment_id);
                 } else {
@@ -1803,9 +1803,7 @@ impl PaymentProcessor {
         let now = env.ledger().timestamp();
         let resolved_expires_at = match args.expires_at {
             Some(ts) => ts,
-            None => now.saturating_add(
-                args.duration_secs.unwrap_or(DEFAULT_PAYMENT_DURATION_SECS),
-            ),
+            None => now.saturating_add(args.duration_secs.unwrap_or(DEFAULT_PAYMENT_DURATION_SECS)),
         };
         if resolved_expires_at <= now {
             return Err(Error::InvalidExpiry);
@@ -1907,7 +1905,7 @@ impl PaymentProcessor {
         let tolerance = if let Some(ref token_addr) = payment.token_address {
             let decimals = token::TokenClient::new(&env, token_addr).decimals();
             if decimals >= 6 {
-                let exp = (decimals - 6) as u32;
+                let exp = decimals - 6;
                 let mut t: i128 = 1;
                 let mut i = 0u32;
                 while i < exp {
@@ -2135,9 +2133,55 @@ impl PaymentProcessor {
         Ok(())
     }
 
+    /// Validate DEX path quotes before executing a swap.
+    /// Blocks circular routes and rejects paths whose quoted output is below the minimum.
+    fn validate_path_returns(
+        env: &Env,
+        dex_router: &Address,
+        token_in: &Address,
+        amount_in: i128,
+        amount_out_min: i128,
+        path: &Vec<Address>,
+    ) -> Result<Vec<i128>, Error> {
+        if path.len() < 2 {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        if path.get(0) != Some(token_in.clone()) {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        // Circular paths are a common arbitrage exploitation pattern.
+        for i in 0..path.len() {
+            for j in (i + 1)..path.len() {
+                if path.get(i) == path.get(j) {
+                    return Err(Error::ArbitrageDetected);
+                }
+            }
+        }
+
+        let dex_client = DexRouterClient::new(env, dex_router);
+        let amounts = dex_client.get_amounts_out(&amount_in, path);
+
+        if amounts.len() != path.len() {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        if amounts.get(0) != Some(amount_in) {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        let quoted_out = amounts.get(path.len() - 1).ok_or(Error::SwapPathInvalid)?;
+        if quoted_out < amount_out_min {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        Ok(amounts)
+    }
+
     /// Atomic swap and pay: swap sender's token to merchant's required token and create payment.
     /// Integrates with DEX (e.g., Soroswap) for atomic asset conversion.
-    /// 
+    ///
     /// # Arguments
     /// * `payer` - The address making the payment
     /// * `payment_id` - Unique payment identifier
@@ -2151,14 +2195,11 @@ impl PaymentProcessor {
     /// * `path` - DEX swap path [token_in, ..., settlement_token]
     /// * `expires_at` - Payment expiry timestamp
     /// * `dex_router` - Address of the DEX router contract
-    /// 
+    ///
     /// # Returns
     /// The created PaymentCharge on success
     #[allow(clippy::too_many_arguments)]
-    pub fn swap_and_pay(
-        env: Env,
-        args: SwapAndPayArgs,
-    ) -> Result<PaymentCharge, Error> {
+    pub fn swap_and_pay(env: Env, args: SwapAndPayArgs) -> Result<PaymentCharge, Error> {
         args.payer.require_auth();
 
         // Validate inputs
@@ -2166,13 +2207,27 @@ impl PaymentProcessor {
             return Err(Error::InvalidAmount);
         }
 
+        if args.amount_out_min < args.amount {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        // Issue #226: check path returns before executing the swap.
+        let quoted_amounts = Self::validate_path_returns(
+            &env,
+            &args.dex_router,
+            &args.token_in,
+            args.amount_in,
+            args.amount_out_min,
+            &args.path,
+        )?;
+
         // Execute atomic swap via DEX router
         let deadline = env.ledger().timestamp().saturating_add(3_600); // 1 hour deadline
-        
+
         let dex_client = DexRouterClient::new(&env, &args.dex_router);
-        
+
         // Perform the swap - this transfers tokens from payer and sends output to deposit_address
-        let _swap_result = dex_client.swap_exact_tokens_for_tokens(
+        let swap_result = dex_client.swap_exact_tokens_for_tokens(
             &args.amount_in,
             &args.amount_out_min,
             &args.path,
@@ -2180,7 +2235,25 @@ impl PaymentProcessor {
             &deadline,
         );
 
+        let actual_out = swap_result
+            .get(args.path.len() - 1)
+            .ok_or(Error::SwapPathInvalid)?;
+        if actual_out < args.amount_out_min {
+            return Err(Error::SwapPathInvalid);
+        }
+
+        let quoted_out = quoted_amounts
+            .get(args.path.len() - 1)
+            .ok_or(Error::SwapPathInvalid)?;
+        if actual_out < quoted_out {
+            return Err(Error::ArbitrageDetected);
+        }
+
         // Now create the payment with the swapped amount
+        let settlement_token = args
+            .path
+            .get(args.path.len() - 1)
+            .unwrap_or(args.token_in.clone());
         let create_args = CreatePaymentArgs {
             payment_id: args.payment_id.clone(),
             merchant_id: args.merchant_id,
@@ -2191,7 +2264,7 @@ impl PaymentProcessor {
             duration_secs: None,
             memo: None,
             memo_type: None,
-            token_address: Some(args.deposit_address),
+            token_address: Some(settlement_token),
             client_token: None,
         };
 
@@ -2204,11 +2277,18 @@ impl PaymentProcessor {
                 Symbol::new(&env, "AND"),
                 Symbol::new(&env, "PAY"),
             ),
-            (args.payment_id, args.payer, args.amount_in, args.token_in, args.amount),
+            (
+                args.payment_id,
+                args.payer,
+                args.amount_in,
+                args.token_in,
+                args.amount,
+            ),
         );
         Ok(payment)
     }
 
+    #[allow(dead_code)]
     fn get_next_stream_id(env: &Env) -> u64 {
         let mut counter: u64 = env
             .storage()
@@ -2258,29 +2338,92 @@ impl PaymentProcessor {
         env.storage().persistent().extend_ttl(key, threshold, ttl);
     }
 
-    pub fn cancel_stream(env: Env, sender: Address, stream_id: String) -> Result<(), StreamError> { PaymentStreaming::cancel_stream(env, sender, stream_id) }
+    pub fn cancel_stream(env: Env, sender: Address, stream_id: String) -> Result<(), StreamError> {
+        PaymentStreaming::cancel_stream(env, sender, stream_id)
+    }
 
-    pub fn cancel_multiple_streams(env: Env, sender: Address, stream_ids: Vec<String>) -> Result<Vec<String>, StreamError> { PaymentStreaming::cancel_multiple_streams(env, sender, stream_ids) }
+    pub fn cancel_multiple_streams(
+        env: Env,
+        sender: Address,
+        stream_ids: Vec<String>,
+    ) -> Result<Vec<String>, StreamError> {
+        PaymentStreaming::cancel_multiple_streams(env, sender, stream_ids)
+    }
 
-    pub fn batch_withdraw_to(env: Env, recipient: Address, withdrawals: Vec<WithdrawalRecipient>) -> Result<Vec<String>, StreamError> { PaymentStreaming::batch_withdraw_to(env, recipient, withdrawals) }
+    pub fn batch_withdraw_to(
+        env: Env,
+        recipient: Address,
+        withdrawals: Vec<WithdrawalRecipient>,
+    ) -> Result<Vec<String>, StreamError> {
+        PaymentStreaming::batch_withdraw_to(env, recipient, withdrawals)
+    }
 
-    pub fn withdraw_all_for_recipient(env: Env, recipient: Address, max_streams: u32) -> Result<Vec<String>, StreamError> { PaymentStreaming::withdraw_all_for_recipient(env, recipient, max_streams) }
+    pub fn withdraw_all_for_recipient(
+        env: Env,
+        recipient: Address,
+        max_streams: u32,
+    ) -> Result<Vec<String>, StreamError> {
+        PaymentStreaming::withdraw_all_for_recipient(env, recipient, max_streams)
+    }
 
-    pub fn trigger_withdrawal(env: Env, stream_id: String) -> Result<String, StreamError> { PaymentStreaming::trigger_withdrawal(env, stream_id) }
+    pub fn trigger_withdrawal(env: Env, stream_id: String) -> Result<String, StreamError> {
+        PaymentStreaming::trigger_withdrawal(env, stream_id)
+    }
 
-    pub fn set_stream_destination(env: Env, recipient: Address, stream_id: String, destination: Address) -> Result<(), StreamError> { PaymentStreaming::set_stream_destination(env, recipient, stream_id, destination) }
+    pub fn set_stream_destination(
+        env: Env,
+        recipient: Address,
+        stream_id: String,
+        destination: Address,
+    ) -> Result<(), StreamError> {
+        PaymentStreaming::set_stream_destination(env, recipient, stream_id, destination)
+    }
 
-    pub fn get_sender_streams(env: Env, sender: Address, page: u32, page_size: u32) -> Vec<PaymentStream> { PaymentStreaming::get_sender_streams(env, sender, page, page_size) }
+    pub fn get_sender_streams(
+        env: Env,
+        sender: Address,
+        page: u32,
+        page_size: u32,
+    ) -> Vec<PaymentStream> {
+        PaymentStreaming::get_sender_streams(env, sender, page, page_size)
+    }
 
-    pub fn get_stream(env: Env, stream_id: String) -> Result<PaymentStream, StreamError> { PaymentStreaming::get_stream(env, stream_id) }
+    pub fn get_stream(env: Env, stream_id: String) -> Result<PaymentStream, StreamError> {
+        PaymentStreaming::get_stream(env, stream_id)
+    }
 
     /// Create a new payment stream. Tokens are pulled from `sender` into the contract.
-    pub fn create_stream(env: Env, sender: Address, receiver: Address, token: Address, rate_per_second: i128, deposit: i128, stream_id: String) -> Result<PaymentStream, StreamError> { PaymentStreaming::create_stream(env, sender, receiver, token, rate_per_second, deposit, stream_id) }
+    pub fn create_stream(
+        env: Env,
+        sender: Address,
+        receiver: Address,
+        token: Address,
+        rate_per_second: i128,
+        deposit: i128,
+        stream_id: String,
+    ) -> Result<PaymentStream, StreamError> {
+        PaymentStreaming::create_stream(
+            env,
+            sender,
+            receiver,
+            token,
+            rate_per_second,
+            deposit,
+            stream_id,
+        )
+    }
 
-    pub fn top_up_multiple_streams(env: Env, sender: Address, top_ups: Vec<(String, i128)>) -> Result<(), StreamError> { PaymentStreaming::top_up_multiple_streams(env, sender, top_ups) }
-
+    pub fn top_up_multiple_streams(
+        env: Env,
+        sender: Address,
+        top_ups: Vec<(String, i128)>,
+    ) -> Result<(), StreamError> {
+        PaymentStreaming::top_up_multiple_streams(env, sender, top_ups)
+    }
 }
 
+#[cfg(test)]
+mod arbitrage_test;
 #[cfg(test)]
 mod auth_test;
 #[cfg(test)]
@@ -2306,7 +2449,9 @@ mod test;
 
 // Payment streaming module (Issue #127)
 pub mod stream;
-pub use stream::{PaymentStream, PaymentStreaming, PaymentStreamingClient, StreamError, StreamStatus};
+pub use stream::{
+    PaymentStream, PaymentStreaming, PaymentStreamingClient, StreamError, StreamStatus,
+};
 #[cfg(test)]
 mod stream_test;
 

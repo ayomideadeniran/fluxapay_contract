@@ -3,8 +3,6 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
-use crate::PAYMENT_TOLERANCE;
-
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaymentLink {
@@ -187,7 +185,12 @@ impl PaymentLinkManager {
         for link_id in link_ids.iter() {
             match Self::get_link_internal(&env, &link_id) {
                 Ok(link) => {
-                    results.push_back((link_id.clone(), link.active, link.use_count, link.max_uses));
+                    results.push_back((
+                        link_id.clone(),
+                        link.active,
+                        link.use_count,
+                        link.max_uses,
+                    ));
                 }
                 Err(_) => {
                     // Link not found - return inactive status

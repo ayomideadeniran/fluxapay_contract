@@ -9,21 +9,21 @@ use soroban_sdk::{
 
 #[test]
 fn test_datakey_discriminant_stability() {
-    let env = Env::default();
-    
+    let _env = Env::default();
+
     // We verify that the enum variants have stable discriminants.
     // In Soroban, discriminants are 0-indexed based on definition order.
     // If someone reorders the enum, these tests will fail (if we check XDR).
     // A simpler way is to check that we can still read what we write.
-    
+
     // However, the task specifically asked to check index.
-    // We can use core::mem::discriminant if it was stable across compiles, but 
+    // We can use core::mem::discriminant if it was stable across compiles, but
     // in Rust it's not guaranteed unless #[repr(u32)] is used.
     // DataKey in lib.rs DOES NOT have #[repr(u32)].
-    
+
     // But Soroban's contracttype macro for enums uses the order of variants.
     // Let's check the first few variants.
-    
+
     // We can't easily check the raw discriminant without converting to XDR.
 }
 
@@ -31,7 +31,7 @@ fn setup_payment_processor(env: &Env) -> (Address, PaymentProcessorClient<'_>) {
     let contract_id = env.register(PaymentProcessor, ());
     let client = PaymentProcessorClient::new(env, &contract_id);
     let admin = Address::generate(env);
-    client.initialize_payment_processor(&admin).unwrap();
+    client.initialize_payment_processor(&admin);
     (admin, client)
 }
 
@@ -83,8 +83,8 @@ fn test_create_payment() {
     let merchant_id = Address::generate(&env);
     let amount = 1000000000i128; // 1000 USDC (6 decimals)
     let currency = Symbol::new(&env, "USDC");
-    let deposit_address = Address::generate(&env);
-    let expires_at = env.ledger().timestamp() + 3600;
+    let _deposit_address = Address::generate(&env);
+    let _expires_at = env.ledger().timestamp() + 3600;
     client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     let args = create_payment_args(&env, &payment_id, &merchant_id, amount);
@@ -94,7 +94,7 @@ fn test_create_payment() {
     assert_eq!(payment.merchant_id, merchant_id);
     assert_eq!(payment.amount, amount);
     assert_eq!(payment.currency, currency);
-    assert_eq!(payment.deposit_address, deposit_address);
+    assert_eq!(payment.deposit_address, args.deposit_address);
     assert_eq!(payment.status, PaymentStatus::Pending);
     assert_eq!(payment.memo, None);
     assert_eq!(payment.memo_type, None);
@@ -109,9 +109,9 @@ fn test_create_payment_rate_limit_enforced() {
     let merchant_id = Address::generate(&env);
     client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
-    let currency = Symbol::new(&env, "USDC");
-    let deposit_address = Address::generate(&env);
-    let expires_at = env.ledger().timestamp() + 3600;
+    let _currency = Symbol::new(&env, "USDC");
+    let _deposit_address = Address::generate(&env);
+    let _expires_at = env.ledger().timestamp() + 3600;
 
     for i in 0..CREATE_PAYMENT_MAX_PER_WINDOW {
         let payment_id = format_id(&env, "rate_limit_", i as u64);
@@ -133,7 +133,9 @@ fn test_cancel_multiple_streams_for_sender() {
     let (_admin, client) = setup_payment_processor(&env);
 
     let token_admin = Address::generate(&env);
-    let token = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let token = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
     token::StellarAssetClient::new(&env, &token).mint(&client.address, &1_000_000i128);
 
     let sender = Address::generate(&env);
@@ -144,8 +146,22 @@ fn test_cancel_multiple_streams_for_sender() {
     // Fund sender
     token::StellarAssetClient::new(&env, &token).mint(&sender, &1_000_000i128);
 
-    client.create_stream(&sender, &recipient, &token, &100i128, &1_000i128, &stream_id1);
-    client.create_stream(&sender, &recipient, &token, &200i128, &2_000i128, &stream_id2);
+    client.create_stream(
+        &sender,
+        &recipient,
+        &token,
+        &100i128,
+        &1_000i128,
+        &stream_id1,
+    );
+    client.create_stream(
+        &sender,
+        &recipient,
+        &token,
+        &200i128,
+        &2_000i128,
+        &stream_id2,
+    );
 
     let stream_ids = vec![&env, stream_id1.clone(), stream_id2.clone()];
     let cancelled = client.cancel_multiple_streams(&sender, &stream_ids);
@@ -164,7 +180,9 @@ fn test_batch_withdraw_to_custom_routing() {
     let (_admin, client) = setup_payment_processor(&env);
 
     let token_admin = Address::generate(&env);
-    let token = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+    let token = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
     let token_client = token::StellarAssetClient::new(&env, &token);
 
     let sender = Address::generate(&env);
@@ -177,8 +195,22 @@ fn test_batch_withdraw_to_custom_routing() {
     // Fund sender and let contract hold tokens
     token_client.mint(&sender, &10_000i128);
 
-    client.create_stream(&sender, &recipient, &token, &100i128, &1_000i128, &stream_id1);
-    client.create_stream(&sender, &recipient, &token, &200i128, &2_000i128, &stream_id2);
+    client.create_stream(
+        &sender,
+        &recipient,
+        &token,
+        &100i128,
+        &1_000i128,
+        &stream_id1,
+    );
+    client.create_stream(
+        &sender,
+        &recipient,
+        &token,
+        &200i128,
+        &2_000i128,
+        &stream_id2,
+    );
 
     // Advance time so some tokens accrue
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
@@ -338,18 +370,33 @@ fn test_get_merchant_payments_index_and_pagination() {
     let (admin, client) = setup_payment_processor(&env);
 
     let merchant_id = Address::generate(&env);
-    let currency = Symbol::new(&env, "USDC");
-    let deposit_address = Address::generate(&env);
-    let expires_at = env.ledger().timestamp() + 3600;
+    let _currency = Symbol::new(&env, "USDC");
+    let _deposit_address = Address::generate(&env);
+    let _expires_at = env.ledger().timestamp() + 3600;
 
     let payment_id_1 = String::from_str(&env, "merchant_pay_1");
     let payment_id_2 = String::from_str(&env, "merchant_pay_2");
     let payment_id_3 = String::from_str(&env, "merchant_pay_3");
 
     client.grant_role(&admin, &role_merchant(&env), &merchant_id);
-    client.create_payment(&create_payment_args(&env, &payment_id_1, &merchant_id, 100i128));
-    client.create_payment(&create_payment_args(&env, &payment_id_2, &merchant_id, 200i128));
-    client.create_payment(&create_payment_args(&env, &payment_id_3, &merchant_id, 300i128));
+    client.create_payment(&create_payment_args(
+        &env,
+        &payment_id_1,
+        &merchant_id,
+        100i128,
+    ));
+    client.create_payment(&create_payment_args(
+        &env,
+        &payment_id_2,
+        &merchant_id,
+        200i128,
+    ));
+    client.create_payment(&create_payment_args(
+        &env,
+        &payment_id_3,
+        &merchant_id,
+        300i128,
+    ));
 
     let all = client.get_merchant_payments(&merchant_id);
     assert_eq!(all.len(), 3);
@@ -545,15 +592,17 @@ fn test_process_refund() {
 #[test]
 fn test_initialize_contract() {
     let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(RefundManager, ());
+    let client = RefundManagerClient::new(&env, &contract_id);
+
     let admin = Address::generate(&env);
     let token_admin = Address::generate(&env);
     let usdc_token = env
         .register_stellar_asset_contract_v2(token_admin)
         .address();
 
-    let contract_id = env.register(RefundManager, ());
-    let client = RefundManagerClient::new(&env, &contract_id);
-    client.initialize_refund_manager(&admin, &usdc_token).unwrap();
+    client.initialize_refund_manager(&admin, &usdc_token);
 
     assert_eq!(client.get_admin(), Some(admin.clone()));
     assert!(client.has_role(&role_admin(&env), &admin));
@@ -564,7 +613,7 @@ fn test_initialize_refund_manager_rejects_duplicate_admin_and_token() {
     let env = Env::default();
     let admin = Address::generate(&env);
     let token_admin = Address::generate(&env);
-    let usdc_token = env
+    let _usdc_token = env
         .register_stellar_asset_contract_v2(token_admin)
         .address();
 
@@ -578,10 +627,7 @@ fn test_initialize_refund_manager_rejects_duplicate_admin_and_token() {
 #[test]
 fn test_initialize_refund_manager_rejects_zero_addresses() {
     let env = Env::default();
-    let admin = Address::from_contract_id(
-        &env,
-        &BytesN::from_array(&env, &[0u8; 32]),
-    );
+    let admin = Address::from_str(&env, crate::ZERO_CONTRACT_STRKEY);
     let token_admin = Address::generate(&env);
     let usdc_token = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -597,10 +643,7 @@ fn test_initialize_refund_manager_rejects_zero_addresses() {
 #[test]
 fn test_initialize_payment_processor_rejects_zero_admin() {
     let env = Env::default();
-    let admin = Address::from_contract_id(
-        &env,
-        &BytesN::from_array(&env, &[0u8; 32]),
-    );
+    let admin = Address::from_str(&env, crate::ZERO_CONTRACT_STRKEY);
 
     let contract_id = env.register(PaymentProcessor, ());
     let client = PaymentProcessorClient::new(&env, &contract_id);
@@ -729,9 +772,9 @@ fn test_create_payment_requires_auth() {
     let payment_id = String::from_str(&env, "payment_123");
     let merchant_id = Address::generate(&env);
     let amount = 1000000000i128;
-    let currency = Symbol::new(&env, "USDC");
-    let deposit_address = Address::generate(&env);
-    let expires_at = env.ledger().timestamp() + 3600;
+    let _currency = Symbol::new(&env, "USDC");
+    let _deposit_address = Address::generate(&env);
+    let _expires_at = env.ledger().timestamp() + 3600;
 
     // This should panic because we're not mocking auth
     let args = create_payment_args(&env, &payment_id, &merchant_id, amount);
@@ -1413,11 +1456,8 @@ fn test_set_merchant_limits_invalid_range_fails() {
     client.grant_role(&admin, &role_merchant(&env), &merchant_id);
 
     // min > max — must fail
-    let result = client.try_set_merchant_amount_limits(
-        &merchant_id,
-        &Some(1000i128),
-        &Some(500i128),
-    );
+    let result =
+        client.try_set_merchant_amount_limits(&merchant_id, &Some(1000i128), &Some(500i128));
     assert_eq!(result, Err(Ok(Error::InvalidAmount)));
 }
 
@@ -1536,7 +1576,7 @@ fn test_verify_payment_decimal_aware_tolerance_7_decimals() {
     client.grant_role(&admin, &role_oracle(&env), &oracle);
 
     let payment_id = String::from_str(&env, "pay_7dec");
-    let amount = 1_000_000_0i128; // 1.0 in 7-decimal units
+    let amount = 10_000_000_i128; // 1.0 in 7-decimal units
     let mut args = create_payment_args(&env, &payment_id, &merchant_id, amount);
     args.currency = Symbol::new(&env, "EURC");
     args.token_address = Some(alt_token);
@@ -1572,7 +1612,7 @@ fn test_verify_payment_decimal_aware_tolerance_7_decimals_overpay() {
     client.grant_role(&admin, &role_oracle(&env), &oracle);
 
     let payment_id = String::from_str(&env, "pay_7dec_partial");
-    let amount = 1_000_000_0i128;
+    let amount = 10_000_000_i128;
     let mut args = create_payment_args(&env, &payment_id, &merchant_id, amount);
     args.currency = Symbol::new(&env, "EURC");
     args.token_address = Some(alt_token);
@@ -1602,10 +1642,20 @@ fn test_cumulative_refunds_exceed_payment_amount_fails() {
     let requester = Address::generate(&env);
     let payment_amount = 1000i128;
 
-    client.register_payment(&payment_id, &merchant_id, &payment_amount, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &payment_amount,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // First refund: 600 — ok
-    client.create_refund(&payment_id, &600i128, &String::from_str(&env, "partial 1"), &requester);
+    client.create_refund(
+        &payment_id,
+        &600i128,
+        &String::from_str(&env, "partial 1"),
+        &requester,
+    );
 
     // Second refund: 500 — 600 + 500 = 1100 > 1000 — must fail
     let result = client.try_create_refund(
@@ -1628,7 +1678,12 @@ fn test_refund_exactly_equal_to_payment_amount_succeeds() {
     let requester = Address::generate(&env);
     let payment_amount = 1000i128;
 
-    client.register_payment(&payment_id, &merchant_id, &payment_amount, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &payment_amount,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // Single refund equal to full payment amount — must succeed
     let refund_id = client.create_refund(
@@ -1653,10 +1708,20 @@ fn test_second_refund_after_full_refund_fails() {
     let requester = Address::generate(&env);
     let payment_amount = 1000i128;
 
-    client.register_payment(&payment_id, &merchant_id, &payment_amount, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &payment_amount,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // Full refund — ok
-    client.create_refund(&payment_id, &payment_amount, &String::from_str(&env, "full"), &requester);
+    client.create_refund(
+        &payment_id,
+        &payment_amount,
+        &String::from_str(&env, "full"),
+        &requester,
+    );
 
     // Any additional refund — must fail
     let result = client.try_create_refund(
@@ -1679,7 +1744,12 @@ fn test_rejected_refunds_not_counted_in_cumulative_total() {
     let requester = Address::generate(&env);
     let payment_amount = 1000i128;
 
-    client.register_payment(&payment_id, &merchant_id, &payment_amount, &Symbol::new(&env, "USDC"));
+    client.register_payment(
+        &payment_id,
+        &merchant_id,
+        &payment_amount,
+        &Symbol::new(&env, "USDC"),
+    );
 
     // Create and reject a refund for 800
     let refund_id = client.create_refund(
@@ -1745,7 +1815,10 @@ fn test_settle_payment_single_split() {
     let splits = vec![&env, SettlementSplit { recipient, amount }];
     client.settle_payment(&operator, &payment_id, &splits);
 
-    assert_eq!(client.get_payment(&payment_id).status, PaymentStatus::Settled);
+    assert_eq!(
+        client.get_payment(&payment_id).status,
+        PaymentStatus::Settled
+    );
 }
 
 // --- Idempotency key (client_token) tests ---
@@ -1765,12 +1838,21 @@ fn test_settle_payment_multi_split() {
 
     let splits = vec![
         &env,
-        SettlementSplit { recipient: Address::generate(&env), amount: 600 },
-        SettlementSplit { recipient: Address::generate(&env), amount: 400 },
+        SettlementSplit {
+            recipient: Address::generate(&env),
+            amount: 600,
+        },
+        SettlementSplit {
+            recipient: Address::generate(&env),
+            amount: 400,
+        },
     ];
     client.settle_payment(&operator, &payment_id, &splits);
 
-    assert_eq!(client.get_payment(&payment_id).status, PaymentStatus::Settled);
+    assert_eq!(
+        client.get_payment(&payment_id).status,
+        PaymentStatus::Settled
+    );
 }
 
 // --- Idempotency key (client_token) tests ---
@@ -1917,8 +1999,14 @@ fn test_settle_payment_split_total_mismatch_fails() {
     // Total is 900, not 1000 — must fail
     let splits = vec![
         &env,
-        SettlementSplit { recipient: Address::generate(&env), amount: 500 },
-        SettlementSplit { recipient: Address::generate(&env), amount: 400 },
+        SettlementSplit {
+            recipient: Address::generate(&env),
+            amount: 500,
+        },
+        SettlementSplit {
+            recipient: Address::generate(&env),
+            amount: 400,
+        },
     ];
     let result = client.try_settle_payment(&operator, &payment_id, &splits);
     assert_eq!(result, Err(Ok(Error::InvalidSettlement)));

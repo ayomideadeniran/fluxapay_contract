@@ -115,22 +115,26 @@ fn get_recipient_stream_count(env: &Env, recipient: &Address) -> u32 {
 
 fn append_sender_stream(env: &Env, sender: &Address, stream_id: &String) {
     let count = get_sender_stream_count(env, sender);
-    env.storage()
-        .persistent()
-        .set(&StreamIndexKey::SenderStream(sender.clone(), count), stream_id);
-    env.storage()
-        .persistent()
-        .set(&StreamIndexKey::SenderStreamCount(sender.clone()), &(count + 1));
+    env.storage().persistent().set(
+        &StreamIndexKey::SenderStream(sender.clone(), count),
+        stream_id,
+    );
+    env.storage().persistent().set(
+        &StreamIndexKey::SenderStreamCount(sender.clone()),
+        &(count + 1),
+    );
 }
 
 fn append_recipient_stream(env: &Env, recipient: &Address, stream_id: &String) {
     let count = get_recipient_stream_count(env, recipient);
-    env.storage()
-        .persistent()
-        .set(&StreamIndexKey::RecipientStream(recipient.clone(), count), stream_id);
-    env.storage()
-        .persistent()
-        .set(&StreamIndexKey::RecipientStreamCount(recipient.clone()), &(count + 1));
+    env.storage().persistent().set(
+        &StreamIndexKey::RecipientStream(recipient.clone(), count),
+        stream_id,
+    );
+    env.storage().persistent().set(
+        &StreamIndexKey::RecipientStreamCount(recipient.clone()),
+        &(count + 1),
+    );
 }
 
 fn get_sender_stream_id(env: &Env, sender: &Address, idx: u32) -> Option<String> {
@@ -220,7 +224,7 @@ impl PaymentStreaming {
 
         // Interaction: Transfer deposit from sender into this contract.
         let token_client = token::Client::new(&env, &token);
-        token_client.transfer(&stream.sender, &env.current_contract_address(), &deposit);
+        token_client.transfer(&stream.sender, env.current_contract_address(), &deposit);
 
         env.events().publish(
             (
@@ -335,11 +339,10 @@ impl PaymentStreaming {
         let newly_accrued = (elapsed as i128).saturating_mul(old_rate);
 
         // Clamp so we never accrue more than the remaining deposit.
-        let newly_accrued = newly_accrued.min(stream.remaining_deposit - stream.accrued_at_checkpoint);
+        let newly_accrued =
+            newly_accrued.min(stream.remaining_deposit - stream.accrued_at_checkpoint);
 
-        stream.accrued_at_checkpoint = stream
-            .accrued_at_checkpoint
-            .saturating_add(newly_accrued);
+        stream.accrued_at_checkpoint = stream.accrued_at_checkpoint.saturating_add(newly_accrued);
         stream.last_checkpoint_at = now;
 
         // ── Step 2: Calculate surplus and refund ──────────────────────────────
@@ -369,8 +372,8 @@ impl PaymentStreaming {
             0
         };
 
-        // Apply the new rate.
         stream.rate_per_second = new_rate;
+        stream.remaining_deposit = stream.remaining_deposit.saturating_sub(surplus);
 
         // Persist state before interaction (reentrancy protection)
         env.storage()
@@ -497,17 +500,20 @@ impl PaymentStreaming {
                 let newly_accrued = (elapsed as i128)
                     .saturating_mul(stream.rate_per_second)
                     .min(stream.remaining_deposit - stream.accrued_at_checkpoint);
-                stream.accrued_at_checkpoint = stream
-                    .accrued_at_checkpoint
-                    .saturating_add(newly_accrued);
+                stream.accrued_at_checkpoint =
+                    stream.accrued_at_checkpoint.saturating_add(newly_accrued);
                 stream.last_checkpoint_at = now;
 
-                let withdrawable = stream.accrued_at_checkpoint.min(stream.remaining_deposit).max(0);
+                let withdrawable = stream
+                    .accrued_at_checkpoint
+                    .min(stream.remaining_deposit)
+                    .max(0);
                 if withdrawable == 0 {
                     continue;
                 }
 
-                stream.accrued_at_checkpoint = stream.accrued_at_checkpoint.saturating_sub(withdrawable);
+                stream.accrued_at_checkpoint =
+                    stream.accrued_at_checkpoint.saturating_sub(withdrawable);
                 stream.remaining_deposit = stream.remaining_deposit.saturating_sub(withdrawable);
                 if stream.remaining_deposit == 0 {
                     stream.status = StreamStatus::Exhausted;
@@ -518,11 +524,7 @@ impl PaymentStreaming {
                     .set(&StreamDataKey::Stream(stream_id.clone()), &stream);
 
                 let token_client = token::Client::new(&env, &stream.token);
-                token_client.transfer(
-                    &env.current_contract_address(),
-                    &recipient,
-                    &withdrawable,
-                );
+                token_client.transfer(&env.current_contract_address(), &recipient, &withdrawable);
 
                 env.events().publish(
                     (
@@ -558,7 +560,10 @@ impl PaymentStreaming {
             return Err(StreamError::StreamNotActive);
         }
 
-        let destination = stream.destination.clone().ok_or(StreamError::DestinationNotSet)?;
+        let destination = stream
+            .destination
+            .clone()
+            .ok_or(StreamError::DestinationNotSet)?;
 
         let now = env.ledger().timestamp();
         let elapsed = now.saturating_sub(stream.last_checkpoint_at);
@@ -566,12 +571,13 @@ impl PaymentStreaming {
             .saturating_mul(stream.rate_per_second)
             .min(stream.remaining_deposit - stream.accrued_at_checkpoint);
 
-        stream.accrued_at_checkpoint = stream
-            .accrued_at_checkpoint
-            .saturating_add(newly_accrued);
+        stream.accrued_at_checkpoint = stream.accrued_at_checkpoint.saturating_add(newly_accrued);
         stream.last_checkpoint_at = now;
 
-        let withdrawable = stream.accrued_at_checkpoint.min(stream.remaining_deposit).max(0);
+        let withdrawable = stream
+            .accrued_at_checkpoint
+            .min(stream.remaining_deposit)
+            .max(0);
         if withdrawable == 0 {
             env.storage()
                 .persistent()
@@ -590,11 +596,7 @@ impl PaymentStreaming {
             .set(&StreamDataKey::Stream(stream_id.clone()), &stream);
 
         let token_client = token::Client::new(&env, &stream.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &destination,
-            &withdrawable,
-        );
+        token_client.transfer(&env.current_contract_address(), &destination, &withdrawable);
 
         env.events().publish(
             (
@@ -643,7 +645,7 @@ impl PaymentStreaming {
 
             // Effects
             stream.remaining_deposit = stream.remaining_deposit.saturating_add(amount);
-            
+
             // Persist state before interaction
             env.storage()
                 .persistent()
@@ -651,7 +653,7 @@ impl PaymentStreaming {
 
             // Interaction
             let token_client = token::Client::new(&env, &stream.token);
-            token_client.transfer(&sender, &env.current_contract_address(), &amount);
+            token_client.transfer(&sender, env.current_contract_address(), &amount);
 
             // Event
             env.events().publish(
@@ -675,11 +677,7 @@ impl PaymentStreaming {
     /// # Parameters
     /// * `sender`    – Must be the original stream sender; must sign.
     /// * `stream_id` – Stream to cancel.
-    pub fn cancel_stream(
-        env: Env,
-        sender: Address,
-        stream_id: String,
-    ) -> Result<(), StreamError> {
+    pub fn cancel_stream(env: Env, sender: Address, stream_id: String) -> Result<(), StreamError> {
         sender.require_auth();
 
         let mut stream: PaymentStream = env
@@ -720,11 +718,7 @@ impl PaymentStreaming {
         // Interaction: send accrued amount to receiver, refund to sender
         let token_client = token::Client::new(&env, &stream.token);
         if accrued > 0 {
-            token_client.transfer(
-                &env.current_contract_address(),
-                &stream.receiver,
-                &accrued,
-            );
+            token_client.transfer(&env.current_contract_address(), &stream.receiver, &accrued);
         }
         if refund > 0 {
             token_client.transfer(&env.current_contract_address(), &stream.sender, &refund);
@@ -794,11 +788,7 @@ impl PaymentStreaming {
             // Interactions
             let token_client = token::Client::new(&env, &stream.token);
             if accrued > 0 {
-                token_client.transfer(
-                    &env.current_contract_address(),
-                    &stream.receiver,
-                    &accrued,
-                );
+                token_client.transfer(&env.current_contract_address(), &stream.receiver, &accrued);
             }
             if refund > 0 {
                 token_client.transfer(&env.current_contract_address(), &stream.sender, &refund);

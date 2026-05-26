@@ -2,7 +2,7 @@ use crate::format_id;
 use proptest::prelude::*;
 use soroban_sdk::{
     testutils::{Address as _, BytesN as _, Ledger as _},
-    Address, BytesN, Env, String, Symbol,
+    Address, BytesN, Env, Symbol,
 };
 
 use crate::{

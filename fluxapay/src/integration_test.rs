@@ -160,7 +160,13 @@ fn test_settlement_path() {
     );
 
     // Settle payment to treasury as a single split
-    let splits = vec![&env, SettlementSplit { recipient: treasury.clone(), amount }];
+    let splits = vec![
+        &env,
+        SettlementSplit {
+            recipient: treasury.clone(),
+            amount,
+        },
+    ];
     payment_client.settle_payment(&operator, &payment_id, &splits);
 
     let payment_info = payment_client.get_payment(&payment_id);
