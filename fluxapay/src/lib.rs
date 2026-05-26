@@ -152,6 +152,8 @@ pub enum Error {
     ArbitrageDetected = 27,
     /// DEX path or quoted returns failed validation.
     SwapPathInvalid = 28,
+    /// DEX quoted swap output deviates from the oracle reference price.
+    OraclePriceDeviation = 29,
 }
 
 #[contracttype]
@@ -185,6 +187,12 @@ pub struct SwapAndPayArgs {
     pub path: Vec<Address>,
     pub expires_at: Option<u64>,
     pub dex_router: Address,
+    /// Optional FX oracle used to sanitize DEX swap quotes.
+    pub fx_oracle: Option<Address>,
+    /// Oracle rate pair symbol (required when `fx_oracle` is set).
+    pub oracle_pair: Option<Symbol>,
+    /// Maximum allowed deviation from oracle price in basis points (100 = 1%).
+    pub max_deviation_bps: u32,
 }
 
 #[contracttype]
@@ -2179,6 +2187,48 @@ impl PaymentProcessor {
         Ok(amounts)
     }
 
+    /// Compare DEX quoted output against a fresh oracle reference rate.
+    fn validate_oracle_swap_rate(
+        env: &Env,
+        fx_oracle: &Address,
+        oracle_pair: &Symbol,
+        amount_in: i128,
+        dex_quoted_out: i128,
+        max_deviation_bps: u32,
+    ) -> Result<(), Error> {
+        let oracle_client = FXOracleClient::new(env, fx_oracle);
+        let rate_data = match oracle_client.try_get_rate(oracle_pair) {
+            Ok(Ok(data)) => data,
+            _ => return Err(Error::OraclePriceDeviation),
+        };
+
+        let mut divisor = 1i128;
+        for _ in 0..rate_data.decimals {
+            divisor = divisor.saturating_mul(10);
+        }
+
+        let expected_out = amount_in
+            .saturating_mul(rate_data.rate)
+            .checked_div(divisor)
+            .unwrap_or(0);
+        if expected_out <= 0 {
+            return Err(Error::OraclePriceDeviation);
+        }
+
+        let diff = if dex_quoted_out > expected_out {
+            dex_quoted_out - expected_out
+        } else {
+            expected_out - dex_quoted_out
+        };
+
+        let deviation_bps = diff.saturating_mul(10_000) / expected_out;
+        if deviation_bps > max_deviation_bps as i128 {
+            return Err(Error::OraclePriceDeviation);
+        }
+
+        Ok(())
+    }
+
     /// Atomic swap and pay: swap sender's token to merchant's required token and create payment.
     /// Integrates with DEX (e.g., Soroswap) for atomic asset conversion.
     ///
@@ -2220,6 +2270,20 @@ impl PaymentProcessor {
             args.amount_out_min,
             &args.path,
         )?;
+
+        if let (Some(fx_oracle), Some(oracle_pair)) = (&args.fx_oracle, &args.oracle_pair) {
+            let quoted_out = quoted_amounts
+                .get(args.path.len() - 1)
+                .ok_or(Error::SwapPathInvalid)?;
+            Self::validate_oracle_swap_rate(
+                &env,
+                fx_oracle,
+                oracle_pair,
+                args.amount_in,
+                quoted_out,
+                args.max_deviation_bps,
+            )?;
+        }
 
         // Execute atomic swap via DEX router
         let deadline = env.ledger().timestamp().saturating_add(3_600); // 1 hour deadline
@@ -2435,6 +2499,8 @@ mod integration_test;
 pub mod merchant_registry;
 #[cfg(test)]
 mod merchant_registry_test;
+#[cfg(test)]
+mod oracle_sanitization_test;
 mod payment_link;
 #[cfg(test)]
 mod proptests;
