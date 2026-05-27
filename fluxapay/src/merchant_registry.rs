@@ -1,5 +1,6 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, map, vec, Address, Env, Map, String,
+    Symbol, Vec,
 };
 
 #[contract]
@@ -83,6 +84,12 @@ pub struct Merchant {
     pub suspended_at: Option<u64>,
     /// Custom fee configuration for this merchant.
     pub fee_config: MaybeFeeConfig,
+    /// IPFS hash for content-addressable merchant metadata (issue #208)
+    pub metadata_hash: Option<String>,
+    /// Multi-currency payout addresses mapping (issue #216)
+    pub currency_payout_addresses: Map<String, Address>,
+    /// Whitelist of approved payout addresses (issue #210)
+    pub payout_whitelist: Vec<Address>,
 }
 
 #[contracttype]
@@ -104,6 +111,7 @@ pub enum MerchantError {
     Unauthorized = 3,
     NotVerified = 4,
     AdminAlreadySet = 5,
+    PayoutAddressNotWhitelisted = 6,
 }
 
 #[cfg_attr(
@@ -159,6 +167,9 @@ impl MerchantRegistry {
             suspension_reason: None,
             suspended_at: None,
             fee_config: MaybeFeeConfig::from(fee_config),
+            metadata_hash: None,
+            currency_payout_addresses: map![&env],
+            payout_whitelist: vec![&env],
         };
 
         env.storage()
@@ -195,6 +206,19 @@ impl MerchantRegistry {
             merchant.active = is_active;
         }
         if let Some(addr) = payout_address {
+            // Validate against whitelist if whitelist is not empty (issue #210)
+            if !merchant.payout_whitelist.is_empty() {
+                let mut is_whitelisted = false;
+                for whitelisted_addr in merchant.payout_whitelist.iter() {
+                    if whitelisted_addr == addr {
+                        is_whitelisted = true;
+                        break;
+                    }
+                }
+                if !is_whitelisted {
+                    return Err(MerchantError::PayoutAddressNotWhitelisted);
+                }
+            }
             merchant.payout_address = Some(addr);
         }
         if let Some(acct) = bank_account {
@@ -527,5 +551,201 @@ impl MerchantRegistry {
             .persistent()
             .get(&MerchantDataKey::Merchant(merchant_id.clone()))
             .ok_or(MerchantError::MerchantNotFound)
+    }
+
+    /// Set IPFS metadata hash for merchant profile (issue #208)
+    pub fn set_metadata_hash(
+        env: Env,
+        merchant_id: Address,
+        metadata_hash: String,
+    ) -> Result<(), MerchantError> {
+        merchant_id.require_auth();
+
+        let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        merchant.metadata_hash = Some(metadata_hash);
+
+        env.storage()
+            .persistent()
+            .set(&MerchantDataKey::Merchant(merchant_id.clone()), &merchant);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "MERCHANT"),
+                Symbol::new(&env, "METADATA_UPDATED"),
+            ),
+            merchant_id,
+        );
+
+        Ok(())
+    }
+
+    /// Get IPFS metadata hash for merchant (issue #208)
+    pub fn get_metadata_hash(
+        env: Env,
+        merchant_id: Address,
+    ) -> Result<Option<String>, MerchantError> {
+        let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        Ok(merchant.metadata_hash)
+    }
+
+    /// Add payout address for a specific currency (issue #216)
+    pub fn add_currency_payout(
+        env: Env,
+        merchant_id: Address,
+        currency: String,
+        payout_address: Address,
+    ) -> Result<(), MerchantError> {
+        merchant_id.require_auth();
+
+        let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+
+        // Validate against whitelist if whitelist is not empty (issue #210)
+        if !merchant.payout_whitelist.is_empty() {
+            let mut is_whitelisted = false;
+            for addr in merchant.payout_whitelist.iter() {
+                if addr == payout_address {
+                    is_whitelisted = true;
+                    break;
+                }
+            }
+            if !is_whitelisted {
+                return Err(MerchantError::PayoutAddressNotWhitelisted);
+            }
+        }
+
+        merchant
+            .currency_payout_addresses
+            .set(currency.clone(), payout_address.clone());
+
+        env.storage()
+            .persistent()
+            .set(&MerchantDataKey::Merchant(merchant_id.clone()), &merchant);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "MERCHANT"),
+                Symbol::new(&env, "CURRENCY_PAYOUT_ADDED"),
+            ),
+            (merchant_id, currency, payout_address),
+        );
+
+        Ok(())
+    }
+
+    /// Get payout address for a specific currency (issue #216)
+    pub fn get_currency_payout(
+        env: Env,
+        merchant_id: Address,
+        currency: String,
+    ) -> Result<Option<Address>, MerchantError> {
+        let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        Ok(merchant.currency_payout_addresses.get(currency))
+    }
+
+    /// Get all currency payout mappings for a merchant (issue #216)
+    pub fn get_all_currency_payouts(
+        env: Env,
+        merchant_id: Address,
+    ) -> Result<Map<String, Address>, MerchantError> {
+        let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        Ok(merchant.currency_payout_addresses)
+    }
+
+    /// Add address to payout whitelist (issue #210)
+    pub fn add_to_whitelist(
+        env: Env,
+        merchant_id: Address,
+        payout_address: Address,
+    ) -> Result<(), MerchantError> {
+        merchant_id.require_auth();
+
+        let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+
+        // Check if address is already in whitelist
+        let mut already_exists = false;
+        for addr in merchant.payout_whitelist.iter() {
+            if addr == payout_address {
+                already_exists = true;
+                break;
+            }
+        }
+
+        if !already_exists {
+            merchant.payout_whitelist.push_back(payout_address.clone());
+            env.storage()
+                .persistent()
+                .set(&MerchantDataKey::Merchant(merchant_id.clone()), &merchant);
+
+            env.events().publish(
+                (
+                    Symbol::new(&env, "MERCHANT"),
+                    Symbol::new(&env, "WHITELIST_ADDED"),
+                ),
+                (merchant_id, payout_address),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Remove address from payout whitelist (issue #210)
+    pub fn remove_from_whitelist(
+        env: Env,
+        merchant_id: Address,
+        payout_address: Address,
+    ) -> Result<(), MerchantError> {
+        merchant_id.require_auth();
+
+        let mut merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+
+        let mut new_whitelist = vec![&env];
+        for addr in merchant.payout_whitelist.iter() {
+            if addr != payout_address {
+                new_whitelist.push_back(addr);
+            }
+        }
+
+        merchant.payout_whitelist = new_whitelist;
+        env.storage()
+            .persistent()
+            .set(&MerchantDataKey::Merchant(merchant_id.clone()), &merchant);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "MERCHANT"),
+                Symbol::new(&env, "WHITELIST_REMOVED"),
+            ),
+            (merchant_id, payout_address),
+        );
+
+        Ok(())
+    }
+
+    /// Get payout whitelist for a merchant (issue #210)
+    pub fn get_whitelist(env: Env, merchant_id: Address) -> Result<Vec<Address>, MerchantError> {
+        let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+        Ok(merchant.payout_whitelist)
+    }
+
+    /// Validate if a payout address is whitelisted (issue #210)
+    pub fn is_address_whitelisted(
+        env: Env,
+        merchant_id: Address,
+        payout_address: Address,
+    ) -> Result<bool, MerchantError> {
+        let merchant = Self::get_merchant_internal(&env, &merchant_id)?;
+
+        // If whitelist is empty, all addresses are allowed
+        if merchant.payout_whitelist.is_empty() {
+            return Ok(true);
+        }
+
+        for addr in merchant.payout_whitelist.iter() {
+            if addr == payout_address {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }

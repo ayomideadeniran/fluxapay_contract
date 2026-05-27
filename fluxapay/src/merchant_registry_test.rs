@@ -523,3 +523,501 @@ fn test_suspend_merchant_unauthorized() {
 
     client.suspend_merchant(&attacker, &merchant_id, &String::from_str(&env, "Reason"));
 }
+
+// Tests for issue #208: Content-Addressable Merchant Profiles
+#[test]
+fn test_set_and_get_metadata_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    // Set IPFS hash
+    let ipfs_hash = String::from_str(&env, "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco");
+    client.set_metadata_hash(&merchant_id, &ipfs_hash);
+
+    // Get IPFS hash
+    let retrieved_hash = client.get_metadata_hash(&merchant_id);
+    assert_eq!(retrieved_hash, Some(ipfs_hash));
+}
+
+#[test]
+fn test_metadata_hash_initially_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let hash = client.get_metadata_hash(&merchant_id);
+    assert_eq!(hash, None);
+}
+
+// Tests for issue #216: Multi-Currency Registry Mapping
+#[test]
+fn test_add_and_get_currency_payout() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    // Add payout addresses for different currencies
+    let usdc_payout = Address::generate(&env);
+    let eur_payout = Address::generate(&env);
+    let gbp_payout = Address::generate(&env);
+
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "USDC"), &usdc_payout);
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "EUR"), &eur_payout);
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "GBP"), &gbp_payout);
+
+    // Verify each currency payout
+    assert_eq!(
+        client.get_currency_payout(&merchant_id, &String::from_str(&env, "USDC")),
+        Some(usdc_payout)
+    );
+    assert_eq!(
+        client.get_currency_payout(&merchant_id, &String::from_str(&env, "EUR")),
+        Some(eur_payout)
+    );
+    assert_eq!(
+        client.get_currency_payout(&merchant_id, &String::from_str(&env, "GBP")),
+        Some(gbp_payout)
+    );
+}
+
+#[test]
+fn test_get_all_currency_payouts() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let usdc_payout = Address::generate(&env);
+    let eur_payout = Address::generate(&env);
+
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "USDC"), &usdc_payout);
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "EUR"), &eur_payout);
+
+    let all_payouts = client.get_all_currency_payouts(&merchant_id);
+    assert_eq!(all_payouts.len(), 2);
+    assert_eq!(
+        all_payouts.get(String::from_str(&env, "USDC")),
+        Some(usdc_payout)
+    );
+    assert_eq!(
+        all_payouts.get(String::from_str(&env, "EUR")),
+        Some(eur_payout)
+    );
+}
+
+// Tests for issue #210: Payout Address Whitelist Validation
+#[test]
+fn test_add_to_whitelist() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let addr1 = Address::generate(&env);
+    let addr2 = Address::generate(&env);
+
+    client.add_to_whitelist(&merchant_id, &addr1);
+    client.add_to_whitelist(&merchant_id, &addr2);
+
+    let whitelist = client.get_whitelist(&merchant_id);
+    assert_eq!(whitelist.len(), 2);
+}
+
+#[test]
+fn test_remove_from_whitelist() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let addr1 = Address::generate(&env);
+    let addr2 = Address::generate(&env);
+
+    client.add_to_whitelist(&merchant_id, &addr1);
+    client.add_to_whitelist(&merchant_id, &addr2);
+
+    client.remove_from_whitelist(&merchant_id, &addr1);
+
+    let whitelist = client.get_whitelist(&merchant_id);
+    assert_eq!(whitelist.len(), 1);
+    assert_eq!(whitelist.get(0).unwrap(), addr2);
+}
+
+#[test]
+fn test_is_address_whitelisted() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let addr1 = Address::generate(&env);
+    let addr2 = Address::generate(&env);
+
+    // Empty whitelist allows all addresses
+    assert!(client.is_address_whitelisted(&merchant_id, &addr1));
+    assert!(client.is_address_whitelisted(&merchant_id, &addr2));
+
+    // Add addr1 to whitelist
+    client.add_to_whitelist(&merchant_id, &addr1);
+
+    // Now only addr1 is whitelisted
+    assert!(client.is_address_whitelisted(&merchant_id, &addr1));
+    assert!(!client.is_address_whitelisted(&merchant_id, &addr2));
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #6)")]
+fn test_update_merchant_with_non_whitelisted_payout() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let whitelisted_addr = Address::generate(&env);
+    let non_whitelisted_addr = Address::generate(&env);
+
+    // Add only one address to whitelist
+    client.add_to_whitelist(&merchant_id, &whitelisted_addr);
+
+    // Try to update with non-whitelisted address - should panic
+    client.update_merchant(
+        &merchant_id,
+        &None,
+        &None,
+        &None,
+        &Some(non_whitelisted_addr),
+        &None,
+        &None,
+    );
+}
+
+#[test]
+fn test_update_merchant_with_whitelisted_payout() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let whitelisted_addr = Address::generate(&env);
+
+    // Add address to whitelist
+    client.add_to_whitelist(&merchant_id, &whitelisted_addr);
+
+    // Update with whitelisted address - should succeed
+    client.update_merchant(
+        &merchant_id,
+        &None,
+        &None,
+        &None,
+        &Some(whitelisted_addr.clone()),
+        &None,
+        &None,
+    );
+
+    let merchant = client.get_merchant(&merchant_id);
+    assert_eq!(merchant.payout_address, Some(whitelisted_addr));
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #6)")]
+fn test_add_currency_payout_with_non_whitelisted_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let whitelisted_addr = Address::generate(&env);
+    let non_whitelisted_addr = Address::generate(&env);
+
+    // Add only one address to whitelist
+    client.add_to_whitelist(&merchant_id, &whitelisted_addr);
+
+    // Try to add currency payout with non-whitelisted address - should panic
+    client.add_currency_payout(
+        &merchant_id,
+        &String::from_str(&env, "EUR"),
+        &non_whitelisted_addr,
+    );
+}
+
+#[test]
+fn test_add_currency_payout_with_whitelisted_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    let whitelisted_addr = Address::generate(&env);
+
+    // Add address to whitelist
+    client.add_to_whitelist(&merchant_id, &whitelisted_addr);
+
+    // Add currency payout with whitelisted address - should succeed
+    client.add_currency_payout(
+        &merchant_id,
+        &String::from_str(&env, "EUR"),
+        &whitelisted_addr.clone(),
+    );
+
+    let payout = client.get_currency_payout(&merchant_id, &String::from_str(&env, "EUR"));
+    assert_eq!(payout, Some(whitelisted_addr));
+}
+
+// Test for issue #213: Optimizing Registry Listing Pagination (already implemented)
+#[test]
+fn test_pagination_with_large_merchant_list() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    // Register 10 merchants
+    let merchant_names = [
+        "Merchant 0",
+        "Merchant 1",
+        "Merchant 2",
+        "Merchant 3",
+        "Merchant 4",
+        "Merchant 5",
+        "Merchant 6",
+        "Merchant 7",
+        "Merchant 8",
+        "Merchant 9",
+    ];
+
+    for name in merchant_names.iter() {
+        let merchant_id = Address::generate(&env);
+        client.register_merchant(
+            &merchant_id,
+            &String::from_str(&env, name),
+            &String::from_str(&env, "USDC"),
+            &None,
+            &None,
+            &None,
+        );
+    }
+
+    // Test pagination with page size of 3
+    let page1 = client.get_all_merchants(&0, &3);
+    assert_eq!(page1.len(), 3);
+
+    let page2 = client.get_all_merchants(&3, &3);
+    assert_eq!(page2.len(), 3);
+
+    let page3 = client.get_all_merchants(&6, &3);
+    assert_eq!(page3.len(), 3);
+
+    let page4 = client.get_all_merchants(&9, &3);
+    assert_eq!(page4.len(), 1);
+
+    // Test that offset beyond list returns empty
+    let page5 = client.get_all_merchants(&15, &3);
+    assert_eq!(page5.len(), 0);
+}
+
+#[test]
+fn test_pagination_with_zero_limit() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let merchant_id = Address::generate(&env);
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Test Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    // Zero limit should return empty vector
+    let result = client.get_all_merchants(&0, &0);
+    assert_eq!(result.len(), 0);
+}
+
+// Integration test combining all features
+#[test]
+fn test_full_merchant_lifecycle_with_all_features() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(MerchantRegistry, ());
+    let client = MerchantRegistryClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let merchant_id = Address::generate(&env);
+
+    // Register merchant
+    client.register_merchant(
+        &merchant_id,
+        &String::from_str(&env, "Global Merchant"),
+        &String::from_str(&env, "USDC"),
+        &None,
+        &None,
+        &None,
+    );
+
+    // Set IPFS metadata hash
+    let ipfs_hash = String::from_str(&env, "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco");
+    client.set_metadata_hash(&merchant_id, &ipfs_hash);
+
+    // Setup whitelist
+    let addr1 = Address::generate(&env);
+    let addr2 = Address::generate(&env);
+    let addr3 = Address::generate(&env);
+
+    client.add_to_whitelist(&merchant_id, &addr1);
+    client.add_to_whitelist(&merchant_id, &addr2);
+    client.add_to_whitelist(&merchant_id, &addr3);
+
+    // Add multi-currency payouts
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "USDC"), &addr1);
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "EUR"), &addr2);
+    client.add_currency_payout(&merchant_id, &String::from_str(&env, "GBP"), &addr3);
+
+    // Verify all features
+    let merchant = client.get_merchant(&merchant_id);
+    assert_eq!(merchant.metadata_hash, Some(ipfs_hash));
+
+    let whitelist = client.get_whitelist(&merchant_id);
+    assert_eq!(whitelist.len(), 3);
+
+    let all_payouts = client.get_all_currency_payouts(&merchant_id);
+    assert_eq!(all_payouts.len(), 3);
+
+    // Verify merchant
+    client.verify_merchant(&admin, &merchant_id);
+    let verified_merchant = client.get_merchant(&merchant_id);
+    assert_eq!(verified_merchant.kyc_tier, KycTier::Basic);
+}
