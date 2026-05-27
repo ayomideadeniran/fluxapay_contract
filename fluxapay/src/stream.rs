@@ -1,5 +1,5 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, token, Address, Env, String, Symbol, Vec,
+    contracterror, contracttype, token, Address, Env, String, Symbol, Vec,
 };
 
 use crate::PaymentProcessor;
@@ -149,12 +149,12 @@ fn get_recipient_stream_id(env: &Env, recipient: &Address, idx: u32) -> Option<S
         .get(&StreamIndexKey::RecipientStream(recipient.clone(), idx))
 }
 
-// ─── Contract ─────────────────────────────────────────────────────────────────
+// ─── Implementation ───────────────────────────────────────────────────────────
+// PaymentStreaming is an internal helper called by PaymentProcessor.
+// It is NOT a standalone #[contract] — that would duplicate exported symbols.
 
-#[contract]
 pub struct PaymentStreaming;
 
-#[contractimpl]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl PaymentStreaming {
     /// Contract version bump helper.

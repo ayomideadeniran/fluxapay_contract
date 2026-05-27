@@ -8,6 +8,17 @@ publish = false
 crate-type = ["lib", "cdylib"]
 doctest = false
 
+[features]
+# Build only one contract at a time to keep each WASM under 30 KB.
+# Default builds PaymentProcessor (the primary contract).
+default = ["contract-payment-processor"]
+contract-payment-processor = []
+contract-refund-manager = []
+contract-gas-estimator = []
+contract-fx-oracle = []
+contract-merchant-registry = []
+contract-payment-link = []
+
 [dependencies]
 soroban-sdk = { workspace = true }
 

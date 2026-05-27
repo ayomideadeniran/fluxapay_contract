@@ -106,7 +106,10 @@ pub enum MerchantError {
     AdminAlreadySet = 5,
 }
 
-#[contractimpl]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-merchant-registry"),
+    contractimpl
+)]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl MerchantRegistry {
     pub fn version() -> u32 {

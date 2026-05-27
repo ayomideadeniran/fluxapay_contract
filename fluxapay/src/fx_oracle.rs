@@ -28,7 +28,10 @@ pub enum OracleDataKey {
     StalenessThreshold,
 }
 
-#[contractimpl]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-fx-oracle"),
+    contractimpl
+)]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl FXOracle {
     pub fn version() -> u32 {

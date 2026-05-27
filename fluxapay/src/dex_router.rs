@@ -5,7 +5,10 @@ use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 #[contract]
 pub struct DexRouter;
 
-#[contractimpl]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-dex-router"),
+    contractimpl
+)]
 impl DexRouter {
     /// Get the router's factory address.
     pub fn factory(env: Env) -> Address {

@@ -30,7 +30,10 @@ pub enum LinkDataKey {
 #[contract]
 pub struct PaymentLinkManager;
 
-#[contractimpl]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-payment-link"),
+    contractimpl
+)]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl PaymentLinkManager {
     pub fn version() -> u32 {

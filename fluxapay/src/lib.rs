@@ -324,7 +324,13 @@ pub enum DataKey {
     StreamCounter,
 }
 
-#[contractimpl]
+// When building for WASM deployment, only the active contract's #[contractimpl]
+// is compiled to avoid duplicate exported symbols. On non-WASM targets (tests,
+// tooling), all impls compile so that *Client types are available everywhere.
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-refund-manager"),
+    contractimpl
+)]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl RefundManager {
     pub fn version() -> u32 {
@@ -1393,7 +1399,10 @@ impl RefundManager {
     }
 }
 
-#[contractimpl]
+#[cfg_attr(
+    any(not(target_arch = "wasm32"), feature = "contract-payment-processor"),
+    contractimpl
+)]
 #[allow(deprecated)] // events::publish — migrate to #[contractevent] in a follow-up
 impl PaymentProcessor {
     pub fn version() -> u32 {
@@ -2515,9 +2524,7 @@ mod test;
 
 // Payment streaming module (Issue #127)
 pub mod stream;
-pub use stream::{
-    PaymentStream, PaymentStreaming, PaymentStreamingClient, StreamError, StreamStatus,
-};
+pub use stream::{PaymentStream, PaymentStreaming, StreamError, StreamStatus};
 #[cfg(test)]
 mod stream_test;
 
